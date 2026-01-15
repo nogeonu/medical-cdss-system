@@ -207,10 +207,10 @@ const navItems = [
           <div className="container">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {[
-                { icon: CalendarCheck, title: "간편 예약", desc: "모바일로 쉽고 빠르게", link: "/patient/login" },
+                { icon: CalendarCheck, title: "간편 예약", desc: "모바일로 쉽고 빠르게", link: patientUser ? "/patient/mypage" : "/patient/login" },
                 { icon: Search, title: "진료과 찾기", desc: "증상별 맞춤 진료과", link: "/patient/doctors" },
                 { icon: FileText, title: "제증명 발급", desc: "온라인 즉시 발급", link: patientUser ? "/patient/records" : "/patient/login" },
-                { icon: Stethoscope, title: "건강검진", desc: "나만을 위한 맞춤 검진", link: "/patient/login" }
+                { icon: Stethoscope, title: "건강검진", desc: "나만을 위한 맞춤 검진", link: patientUser ? "/patient/mypage" : "/patient/login" }
               ].map((item, idx) => (
                 <Link key={idx} to={item.link}>
                   <Card className="border-none shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 overflow-hidden group cursor-pointer">

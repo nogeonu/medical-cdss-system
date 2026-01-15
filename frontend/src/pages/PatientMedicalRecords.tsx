@@ -10,6 +10,7 @@ import {
   Stethoscope,
   ClipboardList,
   Home as HomeIcon,
+  Printer,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { apiRequest } from "@/lib/api";
@@ -94,13 +95,17 @@ export default function PatientMedicalRecords() {
     fetchRecords();
   }, [patientUser]);
 
+  const handlePrint = () => {
+    window.print();
+  };
+
   if (!patientUser) {
     return <Navigate to="/patient/login" replace />;
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-16">
-      <header className="border-b bg-white">
+    <div className="min-h-screen bg-slate-50 pb-16 print:bg-white">
+      <header className="border-b bg-white print:hidden">
         <div className="mx-auto flex max-w-5xl flex-col gap-3 px-6 py-8 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.35em] text-primary">
@@ -121,6 +126,15 @@ export default function PatientMedicalRecords() {
               </span>
             </span>
             <Button
+              variant="outline"
+              size="sm"
+              className="h-8 rounded-full px-4 text-xs"
+              onClick={handlePrint}
+            >
+              <Printer className="mr-2 h-3.5 w-3.5" />
+              인쇄하기
+            </Button>
+            <Button
               asChild
               variant="outline"
               size="sm"
@@ -131,6 +145,14 @@ export default function PatientMedicalRecords() {
           </div>
         </div>
       </header>
+
+      {/* 인쇄용 헤더 (화면엔 숨기고 인쇄 시에만 표시) */}
+      <div className="hidden print:block mb-8 text-center">
+        <h1 className="text-3xl font-bold text-slate-900">제증명 발급 확인서</h1>
+        <p className="text-sm text-slate-500 mt-2">
+          발급일자: {new Date().toLocaleDateString("ko-KR")}
+        </p>
+      </div>
 
       <main className="mx-auto mt-10 max-w-5xl space-y-8 px-6">
         {patientInfo && (
