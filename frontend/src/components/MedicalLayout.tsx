@@ -1,12 +1,13 @@
 import React from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Activity, Plus, Calendar, Bell, User, Menu, X } from "lucide-react";
+import { Activity, Plus, Calendar, User, Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/context/AuthContext";
 import doctorProfile from "@/assets/doctor-profile.png";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import NotificationBell from "@/components/NotificationBell";
 
 interface MedicalLayoutProps {
     children: React.ReactNode;
@@ -19,16 +20,16 @@ export default function MedicalLayout({ children, isSidebarOpen, setIsSidebarOpe
     const navigate = useNavigate();
     const location = useLocation();
 
-    const { data: dashboardStats } = useQuery({
-        queryKey: ["dashboard-statistics"],
+    const { data: todayAppointments } = useQuery({
+        queryKey: ["today-appointments-count"],
         queryFn: async () => {
             try {
-                const response = await apiRequest("GET", "/api/lung_cancer/medical-records/dashboard_statistics/");
+                const response = await apiRequest("GET", "/api/patients/appointments/today_appointments_count/");
                 return response;
             } catch (err) {
-                console.error("Layout - 통계 데이터 조회 오류:", err);
+                console.error("Layout - 오늘 예약 수 조회 오류:", err);
                 return {
-                    waiting_count: 0,
+                    today_count: 0,
                 };
             }
         },
@@ -79,10 +80,7 @@ export default function MedicalLayout({ children, isSidebarOpen, setIsSidebarOpe
                             </div>
 
                         {/* Notifications */}
-                        <button className="relative p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
-                            <Bell className="w-5 h-5 text-slate-600 dark:text-slate-400" />
-                            <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                        </button>
+                        <NotificationBell />
 
                         {/* User Profile */}
                         <div className="flex items-center gap-3 pl-4 border-l border-slate-200 dark:border-slate-800">
@@ -132,7 +130,7 @@ export default function MedicalLayout({ children, isSidebarOpen, setIsSidebarOpe
                                 </h1>
 
                                 <p className="text-blue-100/80 mb-4 font-medium">
-                                    오늘 <span className="text-white border-b border-white font-bold">{dashboardStats?.waiting_count || 0}명의 환자</span>가 진료 예정입니다.
+                                    오늘 <span className="text-white border-b border-white font-bold">{todayAppointments?.today_count || 0}개의 예약</span>이 있습니다.
                                 </p>
 
                                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-3">

@@ -188,6 +188,12 @@ export default function Signup() {
                     <SelectItem value="영상의학과">
                       영상의학과 (Medical Staff)
                     </SelectItem>
+                    <SelectItem value="약국">
+                      약국 (Medical Staff)
+                    </SelectItem>
+                    <SelectItem value="검사실">
+                      검사실 (Medical Staff)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>

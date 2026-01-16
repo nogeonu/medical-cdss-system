@@ -117,6 +117,22 @@ export default function Dashboard() {
     refetchInterval: 30000,
   });
 
+  const { data: todayAppointments } = useQuery({
+    queryKey: ["today-appointments-count"],
+    queryFn: async () => {
+      try {
+        const response = await apiRequest("GET", "/api/patients/appointments/today_appointments_count/");
+        return response;
+      } catch (err) {
+        console.error("Dashboard - 오늘 예약 수 조회 오류:", err);
+        return {
+          today_count: 0,
+        };
+      }
+    },
+    refetchInterval: 30000,
+  });
+
   const sortedWaitingPatients = [...(waitingPatients as MedicalRecord[])]
     .sort((a, b) => new Date(a.reception_start_time).getTime() - new Date(b.reception_start_time).getTime());
   const recentPatients = sortedWaitingPatients.slice(0, 5);
@@ -132,7 +148,7 @@ export default function Dashboard() {
     },
     {
       title: "오늘 예약",
-      value: dashboardStats?.today_exams || 0,
+      value: todayAppointments?.today_count || 0,
       icon: Calendar,
       color: "text-purple-600",
       bgColor: "bg-purple-50",

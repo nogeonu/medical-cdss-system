@@ -21,7 +21,8 @@ def normalize_gender(value: str) -> str:
     return normalized
 
 class PatientSerializer(serializers.ModelSerializer):
-    id = serializers.CharField(source='patient_id', read_only=True)
+    id = serializers.CharField(source='patient_id', read_only=True)  # 문자열 patient_id를 id로 매핑 (하위 호환성)
+    pk = serializers.IntegerField(source='id', read_only=True)  # 실제 숫자 primary key
     gender_label = serializers.SerializerMethodField(read_only=True)
 
     def get_gender_label(self, obj):
@@ -31,6 +32,7 @@ class PatientSerializer(serializers.ModelSerializer):
         model = Patient
         fields = [
             'id',
+            'pk',  # 실제 숫자 ID 추가
             'patient_id',
             'name',
             'birth_date',
@@ -46,7 +48,7 @@ class PatientSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         ]
-        read_only_fields = ['id', 'patient_id', 'age', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'pk', 'patient_id', 'age', 'created_at', 'updated_at']
 
 class LungRecordSerializer(serializers.ModelSerializer):
     class Meta:

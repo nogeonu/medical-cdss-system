@@ -32,12 +32,14 @@ INSTALLED_APPS = [
     'rest_framework',
     'corsheaders',
     'drf_yasg',
+    'django_filters',
     'patients',
     'medical_images',
     'dashboard',
     'lung_cancer',
     'literature',
     'mri_viewer',
+    'ocs',
 ]
 
 MIDDLEWARE = [

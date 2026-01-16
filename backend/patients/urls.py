@@ -16,7 +16,7 @@ from .mobile_views import (
 router = DefaultRouter()
 router.register(r'patients', PatientViewSet)
 router.register(r'records', MedicalRecordViewSet)
-router.register(r'appointments', AppointmentViewSet)
+router.register(r'appointments', AppointmentViewSet, basename='appointment')
 
 urlpatterns = [
     path('', include(router.urls)),

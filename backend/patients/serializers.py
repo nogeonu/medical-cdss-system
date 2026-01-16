@@ -1,5 +1,8 @@
+import logging
 from rest_framework import serializers
 from .models import Patient, MedicalRecord, PatientUser, Appointment
+
+logger = logging.getLogger(__name__)
 
 
 class PatientUserSignupSerializer(serializers.Serializer):
@@ -29,8 +32,7 @@ class PatientUserSignupSerializer(serializers.Serializer):
         try:
             # 1단계: 환자 계정(PatientUser) 먼저 생성 (부모)
             patient_id = Patient.generate_patient_id()
-            print(f"[환자 회원가입] 생성된 환자 ID: {patient_id}")
-            print(f"[환자 회원가입] 입력 데이터: {validated_data}")
+            logger.info(f"환자 회원가입: 생성된 환자 ID {patient_id}")
             
             user = PatientUser.objects.create_user(
                 account_id=validated_data["account_id"],
@@ -40,22 +42,20 @@ class PatientUserSignupSerializer(serializers.Serializer):
                 patient_id=patient_id,
                 phone=validated_data["phone"],
             )
-            print(f"[환자 회원가입] PatientUser 생성 완료: {user.account_id}")
+            logger.info(f"환자 회원가입: PatientUser 생성 완료 - {user.account_id}")
 
             # 2단계: 환자 정보(Patient) 생성하고 계정과 연결 (자식)
             patient = Patient.objects.create(
                 patient_id=patient_id,
                 name=validated_data["name"],
                 phone=validated_data["phone"],
-                user_account=user,  # 외래키 연결
+                user_account=user,
             )
-            print(f"[환자 회원가입] Patient 생성 완료: {patient.patient_id}")
+            logger.info(f"환자 회원가입: Patient 생성 완료 - {patient.patient_id}")
 
             return user
         except Exception as e:
-            print(f"[환자 회원가입] 에러 발생: {type(e).__name__}: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"환자 회원가입 실패: {type(e).__name__}: {str(e)}", exc_info=True)
             raise
 
 
@@ -156,15 +156,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        print(f"[Serializer create] validated_data: {validated_data}")
         request = self.context.get('request')
         if request and request.user.is_authenticated:
             validated_data['created_by'] = request.user
-            print(f"[Serializer create] created_by 설정: {request.user}")
-        else:
-            print(f"[Serializer create] 인증되지 않은 사용자")
+            logger.info(f"예약 생성: 사용자 {request.user.username} (ID: {request.user.id})")
         appointment = super().create(validated_data)
-        print(f"[Serializer create] 예약 생성 완료: {appointment.id}")
+        logger.info(f"예약 생성 완료: ID {appointment.id}")
         return appointment
 
     def update(self, instance, validated_data):

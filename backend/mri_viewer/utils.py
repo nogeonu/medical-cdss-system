@@ -473,3 +473,158 @@ def nifti_to_dicom_slices(nifti_file, patient_id=None, patient_name=None, image_
     
     return dicom_slices
 
+
+def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_description="Heatmap Image", modality="MG", orthanc_client=None, study_instance_uid=None):
+    """
+    PIL Image를 DICOM으로 변환
+    
+    Args:
+        pil_image: PIL Image 객체
+        patient_id: 환자 ID
+        patient_name: 환자 이름
+        series_description: Series 설명
+        modality: Modality (기본값: MG - Mammography)
+        orthanc_client: OrthancClient 인스턴스 (기존 Study 찾기용, 선택사항)
+        study_instance_uid: 기존 StudyInstanceUID (제공되면 재사용)
+    
+    Returns:
+        bytes: DICOM 파일의 바이트 데이터
+    """
+    import numpy as np
+    
+    # PIL Image를 numpy 배열로 변환 (컬러 이미지 유지)
+    is_color = pil_image.mode in ('RGB', 'RGBA')
+    
+    if pil_image.mode == 'RGBA':
+        # RGBA를 RGB로 변환 (알파 채널 제거)
+        pil_image = pil_image.convert('RGB')
+        img_array = np.array(pil_image)
+    elif pil_image.mode == 'RGB':
+        # RGB 이미지는 그대로 유지
+        img_array = np.array(pil_image)
+    else:
+        # 그레이스케일 이미지
+        img_array = np.array(pil_image)
+        if len(img_array.shape) == 2:
+            # 2D 그레이스케일을 3D로 확장 (H, W) -> (H, W, 1)
+            img_array = img_array[:, :, np.newaxis]
+    
+    # 컬러 이미지인 경우 (H, W, 3) 형태
+    if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
+        # RGB 이미지를 uint16으로 변환 (각 채널별로)
+        if img_array.dtype != np.uint16:
+            # 0-65535 범위로 스케일링 (각 채널별)
+            if img_array.max() > 0:
+                img_array = (img_array.astype(np.float32) / 255.0 * 65535).astype(np.uint16)
+            else:
+                img_array = img_array.astype(np.uint16)
+    else:
+        # 그레이스케일 이미지 처리
+        if len(img_array.shape) == 3:
+            img_array = img_array[:, :, 0]  # 첫 번째 채널만 사용
+        
+        # uint16으로 변환
+        if img_array.dtype != np.uint16:
+            if img_array.max() > 0:
+                img_array = (img_array.astype(np.float32) / img_array.max() * 65535).astype(np.uint16)
+            else:
+                img_array = img_array.astype(np.uint16)
+    
+    # 환자 정보 설정
+    if patient_id is None:
+        patient_id = "UNKNOWN"
+    if patient_name is None:
+        patient_name = patient_id
+    
+    # 기존 Study 찾기 (같은 환자의 기존 Study에 속하도록)
+    if study_instance_uid is None and orthanc_client is not None and patient_id:
+        try:
+            existing_uid = orthanc_client.get_existing_study_instance_uid(patient_id)
+            if existing_uid:
+                study_instance_uid = existing_uid
+                logger.info(f"기존 StudyInstanceUID 재사용: {study_instance_uid[:20]}... (patient_id: {patient_id})")
+        except Exception as e:
+            logger.warning(f"기존 StudyInstanceUID 찾기 실패, 새로 생성: {e}")
+    
+    # Study 정보
+    if study_instance_uid is None:
+        study_instance_uid = generate_uid()
+        logger.info(f"새 StudyInstanceUID 생성: {study_instance_uid[:20]}... (patient_id: {patient_id})")
+    
+    # DICOM 데이터셋 생성
+    ds = Dataset()
+    
+    # 필수 DICOM 태그
+    ds.PatientID = str(patient_id)
+    ds.PatientName = str(patient_name)
+    ds.PatientBirthDate = ""
+    ds.PatientSex = ""
+    
+    # Study 정보
+    ds.StudyInstanceUID = study_instance_uid
+    ds.StudyDate = datetime.now().strftime("%Y%m%d")
+    ds.StudyTime = datetime.now().strftime("%H%M%S")
+    ds.StudyID = str(uuid.uuid4())[:8]
+    ds.StudyDescription = "Mammography Analysis"
+    
+    # Series 정보
+    ds.SeriesInstanceUID = generate_uid()
+    ds.SeriesNumber = "1"
+    ds.SeriesDescription = series_description
+    ds.Modality = modality
+    
+    # Instance 정보
+    ds.InstanceNumber = "1"
+    ds.SOPInstanceUID = generate_uid()
+    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.1.2"  # Digital Mammography X-Ray Image Storage
+    
+    # 이미지 파라미터
+    ds.Rows = img_array.shape[0]
+    ds.Columns = img_array.shape[1]
+    ds.BitsAllocated = 16
+    ds.BitsStored = 16
+    ds.HighBit = 15
+    ds.PixelRepresentation = 0  # Unsigned
+    
+    # 컬러 이미지인 경우 RGB 설정
+    if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
+        ds.SamplesPerPixel = 3
+        ds.PhotometricInterpretation = "RGB"
+        ds.PlanarConfiguration = 0  # 0 = interleaved (RGBRGBRGB...)
+        # 픽셀 데이터를 interleaved 형식으로 변환 (R, G, B 순서)
+        # (H, W, 3) -> (H*W, 3) -> (H*W*3) 형태로 변환
+        # 각 픽셀의 R, G, B 값이 연속적으로 배치되도록
+        h, w = img_array.shape[:2]
+        pixel_data = img_array.reshape(h * w, 3).astype(np.uint16)
+        # uint16 배열을 바이트로 변환 (little-endian)
+        pixel_data = pixel_data.tobytes()
+        logger.info(f"✅ RGB 컬러 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
+    else:
+        ds.SamplesPerPixel = 1
+        ds.PhotometricInterpretation = "MONOCHROME2"
+        # 그레이스케일 이미지
+        if len(img_array.shape) == 3:
+            img_array = img_array[:, :, 0]
+        pixel_data = img_array.astype(np.uint16).tobytes()
+        logger.info(f"✅ 그레이스케일 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
+    
+    # 픽셀 데이터
+    ds.PixelData = pixel_data
+    
+    # 파일로 저장 (메모리)
+    buffer = BytesIO()
+    
+    # DICOM File Meta Information 설정
+    file_meta = Dataset()
+    file_meta.MediaStorageSOPClassUID = ds.SOPClassUID
+    file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
+    file_meta.ImplementationClassUID = "1.2.3.4.5.6.7.8.9"
+    file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'  # Explicit VR Little Endian
+    
+    ds.file_meta = file_meta
+    ds.is_implicit_VR = False
+    ds.is_little_endian = True
+    
+    pydicom.dcmwrite(buffer, ds, write_like_original=False)
+    return buffer.getvalue()
+

@@ -472,17 +472,17 @@ class SegmentationWorker(Worker):
             if h != model_h or w != model_w:
                 logger.info(f"📍 원본 크기: {h}×{w}, 모델 출력 크기: {model_h}×{model_w} → 리사이즈 필요")
                 zoom_factors = (h / model_h, w / model_w)
-                
-                mask_resized_3d = []
-                for i in range(pred_mask.shape[0]):
+            
+            mask_resized_3d = []
+            for i in range(pred_mask.shape[0]):
                     # 후처리 (경계 정확도 향상)
                     mask_cleaned = postprocess_mask(pred_mask[i, :, :], smooth_boundary=True)
                     # Nearest neighbor로 리사이즈 (경계 보존)
-                    mask_resized = zoom(mask_cleaned, zoom_factors, order=0)
+                mask_resized = zoom(mask_cleaned, zoom_factors, order=0)
                     # 리사이즈 후 추가 후처리 (경계 부드럽게)
                     mask_resized = postprocess_mask(mask_resized, smooth_boundary=True)
-                    mask_resized_3d.append(mask_resized)
-                
+                mask_resized_3d.append(mask_resized)
+            
                 mask_resized_3d = np.stack(mask_resized_3d, axis=0)  # [D, H, W]
             else:
                 logger.info(f"📍 원본 크기와 모델 출력 크기 동일: {h}×{w} → 리사이즈 불필요")

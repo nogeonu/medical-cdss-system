@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
 import requests
 from .models import Patient, LungRecord, LungResult, MedicalRecord
+from patients.models import Appointment
 from .serializers import (
     PatientSerializer, 
     LungRecordSerializer, 
@@ -99,14 +100,72 @@ class PatientViewSet(viewsets.ModelViewSet):
                     medical_record_count = cursor.rowcount
                     print(f"3. MedicalRecord 삭제: {medical_record_count}개")
                     
-                    # 4. patients_appointment 삭제 (있을 경우)
+                    # 4. OCS 관련 데이터 삭제 (주문 삭제 전에 하위 데이터 먼저 삭제)
+                    # 4-1. 영상 분석 결과 삭제
+                    cursor.execute("""
+                        DELETE FROM ocs_imaginganalysisresult 
+                        WHERE order_id IN (
+                            SELECT id FROM ocs_order WHERE patient_id = %s
+                        )
+                    """, [patient_pk])
+                    imaging_analysis_count = cursor.rowcount
+                    print(f"4-1. 영상 분석 결과 삭제: {imaging_analysis_count}개")
+                    
+                    # 4-2. 알림 삭제
+                    cursor.execute("""
+                        DELETE FROM ocs_notification 
+                        WHERE related_order_id IN (
+                            SELECT id FROM ocs_order WHERE patient_id = %s
+                        )
+                    """, [patient_pk])
+                    notification_count = cursor.rowcount
+                    print(f"4-2. 알림 삭제: {notification_count}개")
+                    
+                    # 4-3. 주문 상태 이력 삭제
+                    cursor.execute("""
+                        DELETE FROM ocs_orderstatushistory 
+                        WHERE order_id IN (
+                            SELECT id FROM ocs_order WHERE patient_id = %s
+                        )
+                    """, [patient_pk])
+                    status_history_count = cursor.rowcount
+                    print(f"4-3. 주문 상태 이력 삭제: {status_history_count}개")
+                    
+                    # 4-4. 약물 상호작용 검사 삭제
+                    cursor.execute("""
+                        DELETE FROM ocs_druginteractioncheck 
+                        WHERE order_id IN (
+                            SELECT id FROM ocs_order WHERE patient_id = %s
+                        )
+                    """, [patient_pk])
+                    drug_check_count = cursor.rowcount
+                    print(f"4-4. 약물 상호작용 검사 삭제: {drug_check_count}개")
+                    
+                    # 4-5. 알레르기 검사 삭제
+                    cursor.execute("""
+                        DELETE FROM ocs_allergycheck 
+                        WHERE order_id IN (
+                            SELECT id FROM ocs_order WHERE patient_id = %s
+                        )
+                    """, [patient_pk])
+                    allergy_check_count = cursor.rowcount
+                    print(f"4-5. 알레르기 검사 삭제: {allergy_check_count}개")
+                    
+                    # 4-6. OCS 주문 삭제 (ocs_order 테이블)
+                    cursor.execute("""
+                        DELETE FROM ocs_order WHERE patient_id = %s
+                    """, [patient_pk])
+                    ocs_order_count = cursor.rowcount
+                    print(f"4-6. OCS 주문 삭제: {ocs_order_count}개")
+                    
+                    # 5. patients_appointment 삭제 (있을 경우)
                     cursor.execute("""
                         DELETE FROM patients_appointment WHERE patient_id = %s
                     """, [patient_pk])
                     appointment_count = cursor.rowcount
-                    print(f"4. Appointment 삭제: {appointment_count}개")
+                    print(f"5. Appointment 삭제: {appointment_count}개")
                     
-                    # 5. patient_user 계정 비활성화 (삭제하지 않음)
+                    # 6. patient_user 계정 비활성화 (삭제하지 않음)
                     # 의료 기록 보존을 위해 계정은 유지하되 비활성화만 함
                     cursor.execute("""
                         UPDATE patient_user 
@@ -114,14 +173,14 @@ class PatientViewSet(viewsets.ModelViewSet):
                         WHERE patient_id = %s
                     """, [patient_identifier])
                     user_deactivated = cursor.rowcount
-                    print(f"5. PatientUser 비활성화: {user_deactivated}개")
+                    print(f"6. PatientUser 비활성화: {user_deactivated}개")
                     
-                    # 6. patients_patient 삭제 (Raw SQL로 직접 삭제)
+                    # 7. patients_patient 삭제 (Raw SQL로 직접 삭제)
                     cursor.execute("""
                         DELETE FROM patients_patient WHERE patient_id = %s
                     """, [patient_identifier])
                     patient_count = cursor.rowcount
-                    print(f"6. Patient 정보 삭제: {patient_count}개")
+                    print(f"7. Patient 정보 삭제: {patient_count}개")
                 
                 print(f"=== 환자 정보 삭제 완료: {patient_identifier} ===")
                 print(f"※ 참고: 계정(patient_user)은 비활성화만 되었습니다 (의료 기록 보존)")
@@ -708,7 +767,10 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def dashboard_statistics(self, request):
-        """대시보드 통계 API - medical_record 테이블 기반"""
+        """대시보드 통계 API - medical_record + Appointment 테이블 기반"""
+        from eventeye.doctor_utils import get_department
+        from django.utils import timezone
+        
         try:
             # managed=False이므로 raw SQL 사용
             with connections['default'].cursor() as cursor:
@@ -723,15 +785,25 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
                 # 진료 완료 환자 수
                 cursor.execute("SELECT COUNT(*) FROM medical_record WHERE is_treatment_completed = 1")
                 completed_count = cursor.fetchone()[0]
-                
-                # 오늘 예약 검사 수 (오늘 접수된 기록)
-                from django.utils import timezone
-                today = timezone.now().date()
-                cursor.execute("""
-                    SELECT COUNT(*) FROM medical_record 
-                    WHERE DATE(reception_start_time) = %s
-                """, [today])
-                today_exams = cursor.fetchone()[0]
+            
+            # 오늘 예약 수 (Appointment 모델 사용, 부서별 필터링)
+            today = timezone.now().date()
+            today_appointments = Appointment.objects.filter(
+                start_time__date=today
+            ).exclude(status='cancelled')
+            
+            # 부서별 필터링
+            # 원무과 또는 superuser: 모든 부서 예약 합계 표시
+            # 외과: 외과 예약만 표시
+            # 호흡기내과: 호흡기내과 예약만 표시
+            if request.user.is_authenticated:
+                user_department = get_department(request.user.id)
+                # 원무과나 superuser가 아니면 자신의 부서 예약만 필터링
+                if user_department and user_department != "원무과" and not request.user.is_superuser:
+                    today_appointments = today_appointments.filter(doctor_department=user_department)
+                    logger.info(f"대시보드 통계: {user_department} 부서 필터링 적용, 오늘 예약 수: {today_appointments.count()}")
+            
+            today_exams = today_appointments.count()
             
             return Response({
                 'total_records': total_records,
@@ -740,7 +812,9 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
                 'today_exams': today_exams,
             })
         except Exception as e:
-            print(f"대시보드 통계 오류: {e}")
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"대시보드 통계 오류: {e}", exc_info=True)
             return Response({
                 'error': f'통계 조회 중 오류가 발생했습니다: {str(e)}'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

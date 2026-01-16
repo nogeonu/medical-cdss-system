@@ -18,6 +18,8 @@ from PIL import Image
 from io import BytesIO
 from .models import MedicalImage, AIAnalysisResult
 from .serializers import MedicalImageSerializer
+from mri_viewer.orthanc_client import OrthancClient
+from mri_viewer.utils import pil_image_to_dicom
 
 logger = logging.getLogger(__name__)
 
@@ -428,6 +430,110 @@ class MedicalImageViewSet(viewsets.ModelViewSet):
                         logger.error(f"마스크 이미지 저장 실패: {str(mask_error)}", exc_info=True)
                         # 마스크 저장 실패해도 분석 결과는 저장
                 
+                # Classification인 경우 heatmap 이미지를 Orthanc에 저장
+                logger.info(f"=== Classification 분석 결과 확인 ===")
+                logger.info(f"analysis_type: {analysis_type}")
+                logger.info(f"heatmap_image 존재 여부: {bool(analysis_data.get('heatmap_image'))}")
+                logger.info(f"analysis_data keys: {list(analysis_data.keys())}")
+                logger.info(f"analysis_data 전체: {str(analysis_data)[:500]}")
+                
+                if analysis_type == 'classification':
+                    if not analysis_data.get('heatmap_image'):
+                        logger.error(f"⚠️ heatmap_image가 analysis_data에 없습니다! AI 서비스가 heatmap_image를 반환하지 않았을 수 있습니다.")
+                        logger.error(f"analysis_data 내용: {analysis_data}")
+                    else:
+                        logger.info(f"✅ heatmap_image 발견! Orthanc 저장 시작")
+                
+                if analysis_type == 'classification' and analysis_data.get('heatmap_image'):
+                    try:
+                        logger.info(f"히트맵 이미지 Orthanc 저장 시작. patient_id: {medical_image.patient_id}")
+                        # heatmap 이미지 데이터 가져오기 (base64)
+                        heatmap_data = analysis_data.get('heatmap_image')
+                        logger.info(f"heatmap_data type: {type(heatmap_data)}, length: {len(heatmap_data) if isinstance(heatmap_data, str) else 'N/A'}")
+                        
+                        # base64 디코딩
+                        if isinstance(heatmap_data, str):
+                            if heatmap_data.startswith('data:image'):
+                                heatmap_data = heatmap_data.split(',')[1]
+                            heatmap_bytes = base64.b64decode(heatmap_data)
+                            logger.info(f"Base64 디코딩 완료. bytes length: {len(heatmap_bytes)}")
+                        else:
+                            heatmap_bytes = heatmap_data
+                        
+                        # PIL Image로 변환
+                        heatmap_image = Image.open(BytesIO(heatmap_bytes))
+                        logger.info(f"PIL Image 변환 완료. size: {heatmap_image.size}, mode: {heatmap_image.mode}")
+                        
+                        # 원본 이미지도 Orthanc에 저장
+                        original_image_path = medical_image.image_file.path if hasattr(medical_image.image_file, 'path') else None
+                        logger.info(f"원본 이미지 경로: {original_image_path}, 존재 여부: {os.path.exists(original_image_path) if original_image_path else False}")
+                        
+                        # Orthanc 클라이언트 생성 (기존 Study 찾기용)
+                        logger.info("Orthanc 클라이언트 생성")
+                        orthanc_client = OrthancClient()
+                        logger.info(f"Orthanc URL: {orthanc_client.base_url}")
+                        
+                        # 기존 StudyInstanceUID 찾기 (같은 환자의 기존 Study에 속하도록)
+                        existing_study_uid = None
+                        try:
+                            existing_study_uid = orthanc_client.get_existing_study_instance_uid(str(medical_image.patient_id))
+                            if existing_study_uid:
+                                logger.info(f"기존 StudyInstanceUID 찾음: {existing_study_uid[:20]}... (patient_id: {medical_image.patient_id})")
+                            else:
+                                logger.info(f"기존 Study 없음, 새로 생성 (patient_id: {medical_image.patient_id})")
+                        except Exception as study_error:
+                            logger.warning(f"기존 StudyInstanceUID 찾기 실패: {str(study_error)}")
+                        
+                        if original_image_path and os.path.exists(original_image_path):
+                            try:
+                                logger.info("원본 이미지 Orthanc 저장 시작")
+                                original_image = Image.open(original_image_path)
+                                original_dicom = pil_image_to_dicom(
+                                    original_image,
+                                    patient_id=str(medical_image.patient_id),
+                                    patient_name=str(medical_image.patient_id),
+                                    series_description="Original Mammography",
+                                    modality="MG",
+                                    orthanc_client=orthanc_client,
+                                    study_instance_uid=existing_study_uid
+                                )
+                                logger.info(f"원본 DICOM 변환 완료. size: {len(original_dicom)} bytes")
+                                original_result = orthanc_client.upload_dicom(original_dicom)
+                                logger.info(f"원본 맘모그래피 이미지 Orthanc 저장 완료: {original_result}")
+                            except Exception as orig_error:
+                                logger.error(f"원본 이미지 Orthanc 저장 실패: {str(orig_error)}", exc_info=True)
+                        else:
+                            logger.warning(f"원본 이미지 경로가 없거나 파일이 존재하지 않습니다: {original_image_path}")
+                        
+                        # heatmap 이미지를 DICOM으로 변환 (같은 Study에 속하도록)
+                        logger.info("히트맵 DICOM 변환 시작")
+                        heatmap_dicom = pil_image_to_dicom(
+                            heatmap_image,
+                            patient_id=str(medical_image.patient_id),
+                            patient_name=str(medical_image.patient_id),
+                            series_description="Heatmap Image",
+                            modality="MG",
+                            orthanc_client=orthanc_client,
+                            study_instance_uid=existing_study_uid
+                        )
+                        logger.info(f"히트맵 DICOM 변환 완료. size: {len(heatmap_dicom)} bytes")
+                        
+                        # Orthanc에 업로드
+                        logger.info("히트맵 Orthanc 업로드 시작")
+                        heatmap_result = orthanc_client.upload_dicom(heatmap_dicom)
+                        logger.info(f"히트맵 이미지 Orthanc 저장 완료: {heatmap_result}")
+                        
+                        # results에 Orthanc 인스턴스 ID 저장
+                        if not analysis_data.get('results'):
+                            analysis_data['results'] = {}
+                        if isinstance(heatmap_result, dict) and 'ID' in heatmap_result:
+                            analysis_data['results']['heatmap_orthanc_instance_id'] = heatmap_result['ID']
+                            analysis_data['results']['heatmap_orthanc_url'] = f"{orthanc_client.base_url}/instances/{heatmap_result['ID']}/preview"
+                        
+                    except Exception as heatmap_error:
+                        logger.error(f"히트맵 이미지 Orthanc 저장 실패: {str(heatmap_error)}", exc_info=True)
+                        # 히트맵 저장 실패해도 분석 결과는 저장
+                
                 analysis_result = AIAnalysisResult.objects.create(
                     image=medical_image,
                     analysis_type=db_analysis_type,
@@ -660,6 +766,108 @@ class MedicalImageViewSet(viewsets.ModelViewSet):
                     )
                 
                 analysis_data = result.get('data', {})
+                
+                # heatmap 이미지를 Orthanc에 저장
+                logger.info(f"=== 종양 분석 결과 확인 ===")
+                logger.info(f"heatmap_image 존재 여부: {bool(analysis_data.get('heatmap_image'))}")
+                logger.info(f"analysis_data keys: {list(analysis_data.keys())}")
+                logger.info(f"analysis_data 전체: {str(analysis_data)[:500]}")
+                
+                if not analysis_data.get('heatmap_image'):
+                    logger.error(f"⚠️ heatmap_image가 analysis_data에 없습니다! AI 서비스가 heatmap_image를 반환하지 않았을 수 있습니다.")
+                    logger.error(f"analysis_data 내용: {analysis_data}")
+                else:
+                    logger.info(f"✅ heatmap_image 발견! Orthanc 저장 시작")
+                
+                if analysis_data.get('heatmap_image'):
+                    try:
+                        logger.info(f"히트맵 이미지 Orthanc 저장 시작. patient_id: {medical_image.patient_id}")
+                        # heatmap 이미지 데이터 가져오기 (base64)
+                        heatmap_data = analysis_data.get('heatmap_image')
+                        logger.info(f"heatmap_data type: {type(heatmap_data)}, length: {len(heatmap_data) if isinstance(heatmap_data, str) else 'N/A'}")
+                        
+                        # base64 디코딩
+                        if isinstance(heatmap_data, str):
+                            if heatmap_data.startswith('data:image'):
+                                heatmap_data = heatmap_data.split(',')[1]
+                            heatmap_bytes = base64.b64decode(heatmap_data)
+                            logger.info(f"Base64 디코딩 완료. bytes length: {len(heatmap_bytes)}")
+                        else:
+                            heatmap_bytes = heatmap_data
+                        
+                        # PIL Image로 변환
+                        heatmap_image = Image.open(BytesIO(heatmap_bytes))
+                        logger.info(f"PIL Image 변환 완료. size: {heatmap_image.size}, mode: {heatmap_image.mode}")
+                        
+                        # Orthanc 클라이언트 생성 (기존 Study 찾기용)
+                        logger.info("Orthanc 클라이언트 생성")
+                        orthanc_client = OrthancClient()
+                        logger.info(f"Orthanc URL: {orthanc_client.base_url}")
+                        
+                        # 기존 StudyInstanceUID 찾기 (같은 환자의 기존 Study에 속하도록)
+                        existing_study_uid = None
+                        try:
+                            existing_study_uid = orthanc_client.get_existing_study_instance_uid(str(medical_image.patient_id))
+                            if existing_study_uid:
+                                logger.info(f"기존 StudyInstanceUID 찾음: {existing_study_uid[:20]}... (patient_id: {medical_image.patient_id})")
+                            else:
+                                logger.info(f"기존 Study 없음, 새로 생성 (patient_id: {medical_image.patient_id})")
+                        except Exception as study_error:
+                            logger.warning(f"기존 StudyInstanceUID 찾기 실패: {str(study_error)}")
+                        
+                        # 원본 이미지도 Orthanc에 저장
+                        original_image_path = medical_image.image_file.path if hasattr(medical_image.image_file, 'path') else None
+                        logger.info(f"원본 이미지 경로: {original_image_path}, 존재 여부: {os.path.exists(original_image_path) if original_image_path else False}")
+                        
+                        if original_image_path and os.path.exists(original_image_path):
+                            try:
+                                logger.info("원본 이미지 Orthanc 저장 시작")
+                                original_image = Image.open(original_image_path)
+                                original_dicom = pil_image_to_dicom(
+                                    original_image,
+                                    patient_id=str(medical_image.patient_id),
+                                    patient_name=str(medical_image.patient_id),
+                                    series_description="Original Mammography",
+                                    modality="MG",
+                                    orthanc_client=orthanc_client,
+                                    study_instance_uid=existing_study_uid
+                                )
+                                logger.info(f"원본 DICOM 변환 완료. size: {len(original_dicom)} bytes")
+                                original_result = orthanc_client.upload_dicom(original_dicom)
+                                logger.info(f"원본 맘모그래피 이미지 Orthanc 저장 완료: {original_result}")
+                            except Exception as orig_error:
+                                logger.error(f"원본 이미지 Orthanc 저장 실패: {str(orig_error)}", exc_info=True)
+                        else:
+                            logger.warning(f"원본 이미지 경로가 없거나 파일이 존재하지 않습니다: {original_image_path}")
+                        
+                        # heatmap 이미지를 DICOM으로 변환 (같은 Study에 속하도록)
+                        logger.info("히트맵 DICOM 변환 시작")
+                        heatmap_dicom = pil_image_to_dicom(
+                            heatmap_image,
+                            patient_id=str(medical_image.patient_id),
+                            patient_name=str(medical_image.patient_id),
+                            series_description="Heatmap Image",
+                            modality="MG",
+                            orthanc_client=orthanc_client,
+                            study_instance_uid=existing_study_uid
+                        )
+                        logger.info(f"히트맵 DICOM 변환 완료. size: {len(heatmap_dicom)} bytes")
+                        
+                        # Orthanc에 업로드
+                        logger.info("히트맵 Orthanc 업로드 시작")
+                        heatmap_result = orthanc_client.upload_dicom(heatmap_dicom)
+                        logger.info(f"히트맵 이미지 Orthanc 저장 완료: {heatmap_result}")
+                        
+                        # results에 Orthanc 인스턴스 ID 저장
+                        if not analysis_data.get('results'):
+                            analysis_data['results'] = {}
+                        if isinstance(heatmap_result, dict) and 'ID' in heatmap_result:
+                            analysis_data['results']['heatmap_orthanc_instance_id'] = heatmap_result['ID']
+                            analysis_data['results']['heatmap_orthanc_url'] = f"{orthanc_client.base_url}/instances/{heatmap_result['ID']}/preview"
+                        
+                    except Exception as heatmap_error:
+                        logger.error(f"히트맵 이미지 Orthanc 저장 실패: {str(heatmap_error)}", exc_info=True)
+                        # 히트맵 저장 실패해도 분석 결과는 저장
                 
                 # 종양분석 결과 저장
                 tumor_analysis_result = AIAnalysisResult.objects.create(

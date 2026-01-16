@@ -1,9 +1,13 @@
+import logging
 from rest_framework import viewsets, filters, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework.authentication import SessionAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import Http404
+
+logger = logging.getLogger(__name__)
 from .models import Patient, MedicalRecord, PatientUser, Appointment
 from .serializers import (
     PatientSerializer,
@@ -22,6 +26,32 @@ class PatientViewSet(viewsets.ModelViewSet):
     ordering_fields = ['created_at', 'name']
     ordering = ['-created_at']
     
+    def perform_destroy(self, instance):
+        """환자 삭제 시 관련 데이터도 함께 삭제"""
+        try:
+            # OCS 주문 삭제 (CASCADE로 자동 삭제되어야 하지만 명시적으로 처리)
+            from ocs.models import Order
+            orders = Order.objects.filter(patient=instance)
+            order_count = orders.count()
+            if order_count > 0:
+                logger.info(f"환자 {instance.patient_id} 삭제 전 {order_count}개의 OCS 주문 삭제")
+                orders.delete()
+            
+            # 예약 삭제
+            appointments = Appointment.objects.filter(patient=instance)
+            appointment_count = appointments.count()
+            if appointment_count > 0:
+                logger.info(f"환자 {instance.patient_id} 삭제 전 {appointment_count}개의 예약 삭제")
+                appointments.delete()
+            
+            logger.info(f"환자 {instance.patient_id} 삭제 완료")
+        except Exception as e:
+            logger.error(f"환자 삭제 중 오류 발생: {type(e).__name__}: {str(e)}", exc_info=True)
+            raise
+        
+        # 실제 환자 데이터 삭제
+        instance.delete()
+    
     @action(detail=True, methods=['get'])
     def medical_records(self, request, pk=None):
         patient = self.get_object()
@@ -39,10 +69,8 @@ class PatientSignupView(APIView):
         serializer.is_valid(raise_exception=True)
         try:
             user = serializer.save()
-        except Exception as e:  # pragma: no cover
-            import traceback
-            print(f"[환자 회원가입 VIEW] 에러 발생: {type(e).__name__}: {str(e)}")
-            traceback.print_exc()
+        except Exception as e:
+            logger.error(f"환자 회원가입 실패: {type(e).__name__}: {str(e)}", exc_info=True)
             return Response(
                 {
                     "detail": "환자 계정 생성 중 오류가 발생했습니다.",
@@ -160,54 +188,43 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
-    queryset = Appointment.objects.select_related('patient', 'doctor', 'created_by').all()
+    """예약 ViewSet - 부서별 필터링 적용"""
     serializer_class = AppointmentSerializer
-    permission_classes = [permissions.AllowAny]  # 환자도 예약 가능하도록 변경
-    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['doctor', 'status', 'type', 'doctor_code']
-    search_fields = ['title', 'patient_name', 'patient_id', 'doctor_username', 'doctor_name', 'memo']
-    ordering_fields = ['start_time', 'created_at']
-    ordering = ['start_time']  # 가까운 일정 순으로 정렬
-    pagination_class = None  # 페이지네이션 비활성화 - 모든 예약 데이터 반환
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = [SessionAuthentication]
+    ordering = ['start_time']
+    pagination_class = None
 
     def get_queryset(self):
-        queryset = super().get_queryset()
+        """예약 쿼리셋 - 부서별 필터링"""
+        from eventeye.doctor_utils import get_department
         
-        # 기본적으로 취소되지 않은 예약만 조회
-        # status 파라미터가 명시적으로 전달된 경우에만 해당 상태의 예약 조회
-        status = self.request.query_params.get('status')
-        if status is None:
-            # status 파라미터가 없으면 취소된 예약 제외
-            queryset = queryset.exclude(status='cancelled')
+        queryset = Appointment.objects.select_related('patient', 'doctor', 'created_by').exclude(status='cancelled')
         
-        # patient_id로 필터링 (patient_identifier 필드 사용)
+        # 부서별 필터링: 원무과가 아니면 자신의 부서 예약만
+        if self.request.user.is_authenticated:
+            user_department = get_department(self.request.user.id)
+            if user_department and user_department != "원무과":
+                queryset = queryset.filter(doctor_department=user_department)
+        
+        # 추가 필터링
         patient_id = self.request.query_params.get('patient_id')
         if patient_id:
             queryset = queryset.filter(patient_identifier=patient_id)
         
-        # doctor_code로 필터링
         doctor_code = self.request.query_params.get('doctor_code')
         if doctor_code:
             queryset = queryset.filter(doctor_code=doctor_code)
         
         return queryset
 
-    def get_serializer_context(self):
-        context = super().get_serializer_context()
-        context['request'] = self.request
-        return context
-
     def perform_create(self, serializer):
-        print(f"[예약 등록] 요청 데이터: {self.request.data}")
-        print(f"[예약 등록] 사용자: {self.request.user}")
-        print(f"[예약 등록] 인증 여부: {self.request.user.is_authenticated}")
+        """예약 생성 시 created_by 설정"""
         if self.request.user.is_authenticated:
             serializer.save(created_by=self.request.user)
         else:
             serializer.save()
 
-    def perform_update(self, serializer):
-        serializer.save()
     
     @action(detail=False, methods=['get'])
     def my_appointments(self, request):
@@ -219,6 +236,33 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        appointments = self.queryset.filter(patient_identifier=patient_id).order_by('start_time')
-        serializer = self.get_serializer(appointments, many=True)
+        queryset = self.get_queryset().filter(patient_identifier=patient_id).order_by('start_time')
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
+    
+    @action(detail=False, methods=['get'])
+    def today_appointments_count(self, request):
+        """오늘 예약 수를 진료과별로 반환"""
+        from django.utils import timezone
+        from eventeye.doctor_utils import get_department
+        
+        today = timezone.now().date()
+        
+        # 기본 쿼리셋 (부서별 필터링 적용)
+        queryset = self.get_queryset().filter(
+            start_time__date=today,
+            status='scheduled'  # 예약됨 상태만
+        )
+        
+        # 현재 사용자의 진료과 정보
+        user_department = None
+        if request.user.is_authenticated:
+            user_department = get_department(request.user.id)
+        
+        count = queryset.count()
+        
+        return Response({
+            'today_count': count,
+            'department': user_department,
+            'date': today.isoformat(),
+        })

@@ -38,6 +38,9 @@ import Settings from "@/pages/Settings";
 import HealthInfo from "@/pages/HealthInfo";
 import BreastCancerStats from "@/pages/BreastCancerStats";
 import MedicalLayout from "@/components/MedicalLayout";
+import OCS from "@/pages/OCS";
+import ImagingAnalysisDetail from "@/pages/ImagingAnalysisDetail";
+import Schedule from "@/pages/Schedule";
 
 const queryClient = new QueryClient();
 
@@ -105,6 +108,14 @@ function AppContentInner() {
         }
       />
       <Route
+        path="/schedule"
+        element={
+          <ProtectedRoute allowedRoles={["medical_staff", "admin_staff", "superuser"]}>
+            <ReservationInfo />
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/profile"
         element={
           <ProtectedRoute>
@@ -157,6 +168,38 @@ function AppContentInner() {
         element={
           <ProtectedRoute allowedRoles={["medical_staff", "superuser"]}>
             <KnowledgeHub />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ocs"
+        element={
+          <ProtectedRoute allowedRoles={["medical_staff", "admin_staff", "superuser"]}>
+            <OCS />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ocs/imaging-analysis/:id"
+        element={
+          <ProtectedRoute allowedRoles={["medical_staff", "admin_staff", "superuser"]}>
+            <ImagingAnalysisDetail />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/ocs/orders/:id"
+        element={
+          <ProtectedRoute allowedRoles={["medical_staff", "admin_staff", "superuser"]}>
+            <OCS />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/schedule"
+        element={
+          <ProtectedRoute allowedRoles={["medical_staff", "admin_staff", "superuser"]}>
+            <Schedule />
           </ProtectedRoute>
         }
       />

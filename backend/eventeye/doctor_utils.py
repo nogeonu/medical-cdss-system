@@ -8,12 +8,16 @@ DEPARTMENT_RESPIRATORY = "호흡기내과"
 DEPARTMENT_SURGERY = "외과"
 DEPARTMENT_RADIOLOGY = "방사선과"
 DEPARTMENT_IMAGING = "영상의학과"
+DEPARTMENT_PHARMACY = "약국"
+DEPARTMENT_LAB = "검사실"
 ALLOWED_DEPARTMENTS = {
   DEPARTMENT_ADMIN,
   DEPARTMENT_RESPIRATORY,
   DEPARTMENT_SURGERY,
   DEPARTMENT_RADIOLOGY,
   DEPARTMENT_IMAGING,
+  DEPARTMENT_PHARMACY,
+  DEPARTMENT_LAB,
 }
 
 # 하위 호환성을 위한 영어-한글 매핑
@@ -23,6 +27,8 @@ DEPARTMENT_MAPPING = {
     "surgery": DEPARTMENT_SURGERY,
     "radiology": DEPARTMENT_RADIOLOGY,
     "imaging": DEPARTMENT_IMAGING,
+    "pharmacy": DEPARTMENT_PHARMACY,
+    "lab": DEPARTMENT_LAB,
 }
 
 def normalize_department(dept: str) -> str:
@@ -74,7 +80,7 @@ def _next_doctor_sequence(prefix: str) -> int:
 
 
 def ensure_doctor_id(user_id: int, force: bool = False) -> Optional[str]:
-    """Ensure the specified user has a doctor_id assigned (medical staff only)."""
+    """Ensure the specified user has a doctor_id assigned (medical staff, pharmacy, lab)."""
     department = get_department(user_id)
     if department in (None, DEPARTMENT_ADMIN):
         return None
@@ -83,7 +89,14 @@ def ensure_doctor_id(user_id: int, force: bool = False) -> Optional[str]:
     if current and not force:
         return current
 
-    prefix = f"D{timezone.now().year}"
+    # 부서별 접두사 결정
+    if department == DEPARTMENT_PHARMACY:
+        prefix = f"P{timezone.now().year}"  # Pharmacy: P2025001
+    elif department == DEPARTMENT_LAB:
+        prefix = f"L{timezone.now().year}"  # Lab: L2025001
+    else:
+        prefix = f"D{timezone.now().year}"  # Doctor: D2025001
+
     attempt = 0
 
     while True:

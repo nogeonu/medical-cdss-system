@@ -10,7 +10,8 @@ import {
   CalendarDays,
   ClipboardList,
   Scan,
-  BarChart3
+  BarChart3,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -21,16 +22,22 @@ const departmentNavigation = {
     { name: "폐암 예측", href: "/lung-cancer", icon: Stethoscope },
     { name: "폐암 통계", href: "/lung-cancer-stats", icon: TrendingUp },
     { name: "지식 허브", href: "/knowledge-hub", icon: BookOpen },
+    { name: "예약 정보", href: "/reservation-info", icon: CalendarDays },
+    { name: "처방전달시스템", href: "/ocs", icon: FileText },
   ],
   방사선과: [
     { name: "영상 업로드", href: "/mri-viewer", icon: Scan },
+    { name: "처방전달시스템", href: "/ocs", icon: FileText },
   ],
   영상의학과: [
     { name: "영상 판독", href: "/mri-viewer", icon: Scan },
+    { name: "처방전달시스템", href: "/ocs", icon: FileText },
   ],
   외과: [
     { name: "영상 판독", href: "/mri-viewer", icon: Scan },
     { name: "지식 허브", href: "/knowledge-hub", icon: BookOpen },
+    { name: "예약 정보", href: "/reservation-info", icon: CalendarDays },
+    { name: "처방전달시스템", href: "/ocs", icon: FileText },
   ],
 };
 
@@ -38,6 +45,7 @@ const adminNavigation = [
   { name: "환자 정보", href: "/patients", icon: Users },
   { name: "진료 접수", href: "/medical-registration", icon: ClipboardList },
   { name: "예약 정보", href: "/reservation-info", icon: CalendarDays },
+  { name: "처방전달시스템", href: "/ocs", icon: FileText },
 ];
 
 interface SidebarProps {
