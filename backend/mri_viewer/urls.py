@@ -34,6 +34,7 @@ urlpatterns = [
     # 맘모그래피 AI 분석 API
     path('mammography/analyze/', mammography_views.mammography_ai_analysis, name='analyze-mammography'),
     path('mammography/health/', mammography_views.mammography_health, name='mammography-health'),
+    path('mammography/statistics/', mammography_views.women_health_statistics, name='women-health-statistics'),
     
     # 병리 이미지 AI 분석 API
     path('pathology/analyze/', pathology_views.pathology_ai_analysis, name='analyze-pathology'),
