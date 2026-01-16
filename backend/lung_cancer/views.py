@@ -447,7 +447,23 @@ class LungResultViewSet(viewsets.ReadOnlyModelViewSet):
                         'positive_rate': round((female_positive / female_total * 100), 2) if female_total > 0 else 0
                     }
                 },
-                'average_risk_score': round(float(avg_risk_score), 2)
+                'average_risk_score': round(float(avg_risk_score), 2),
+                'national_statistics': {
+                    'description': '2024년 국가 암 등록 통계 (가상 데이터)',
+                    'positive_rate': 22.4,  # 국가 평균 양성률
+                    'gender_statistics': {
+                        'male': {'positive_rate': 28.5},
+                        'female': {'positive_rate': 16.3}
+                    },
+                    'age_statistics': {  # 연령대별 발병률 (인구 10만명당)
+                        '30': 2.1,
+                        '40': 8.5,
+                        '50': 35.2,
+                        '60': 110.8,
+                        '70': 280.5,
+                        '80': 350.2
+                    }
+                }
             })
         except Exception as e:
             return Response({
