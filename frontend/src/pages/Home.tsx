@@ -339,46 +339,6 @@ const navItems = [
           </div>
         </section>
 
-        {/* Medical Staff Section */}
-        <section className="py-24 bg-white dark:bg-black">
-          <div className="container">
-            <div className="text-center max-w-3xl mx-auto mb-16">
-              <h2 className="text-4xl font-bold mb-4">
-                최고의 <span className="bg-gradient-to-r from-sky-400 via-cyan-400 to-teal-500 bg-clip-text text-transparent">CDSSentials</span>
-              </h2>
-              <p className="text-xl text-muted-foreground">
-                각 분야 최고의 개발자들이 최신 기술을 통해 만든 시스템과 함께 당신의 건강을 지킵니다.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[
-                { name: "노건우", role: "팀장", img: "/images/doctor1.jpeg", desc: "AI 연구 및 시스템 총괄" },
-                { name: "김우선", role: "팀원", img: "/images/doctor2.jpeg", desc: "챗봇 개발 및 채팅" },
-                { name: "박철순", role: "팀원", img: "/images/doctor3.png", desc: "AI 연구(3D모델)" },
-                { name: "이희재", role: "팀원", img: "/images/doctor4.jpeg", desc: "AI 연구(유전체모델)" }
-              ].map((member, idx) => (
-                <div key={idx} className="group relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900">
-                  <div className="aspect-[4/5] overflow-hidden">
-                    <img 
-                      src={member.img} 
-                      alt={member.name} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                    <p className="text-accent font-bold text-base mb-1">{member.role}</p>
-                    <h3 className="text-2xl font-bold mb-2">{member.name}</h3>
-                    <p className="text-white/90 text-base font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
-                      {member.desc}
-                    </p>
-                  </div>
-                  </div>
-                ))}
-            </div>
-          </div>
-        </section>
 
         {/* CDSS Platform Access Banner */}
         <section className="py-20 relative overflow-hidden">
