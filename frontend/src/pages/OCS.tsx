@@ -1375,6 +1375,11 @@ function OrderCard({
                         src={order.pathology_analysis.image_url}
                         alt="병리 분석 이미지"
                         className="w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.parentElement?.querySelector('.pathology-image-fallback');
+                          if (fallback) (fallback as HTMLElement).style.display = 'block';
+                        }}
                         onClick={() => {
                           const newWindow = window.open();
                           if (newWindow) {
@@ -1389,6 +1394,7 @@ function OrderCard({
                           }
                         }}
                       />
+                      <p className="pathology-image-fallback text-xs text-center text-muted-foreground mt-2" style={{ display: 'none' }}>이미지를 불러올 수 없습니다.</p>
                       <p className="text-xs text-center text-muted-foreground mt-2">클릭하여 확대</p>
                     </div>
                   </div>
@@ -1917,7 +1923,13 @@ function OrderCard({
                             src={selectedOrderForPathology.pathology_analysis.image_url} 
                             alt="병리 이미지"
                             className="max-w-full rounded border"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                              const fallback = e.currentTarget.parentElement?.querySelector('.pathology-image-fallback');
+                              if (fallback) (fallback as HTMLElement).style.display = 'block';
+                            }}
                           />
+                          <p className="pathology-image-fallback text-sm text-muted-foreground" style={{ display: 'none' }}>이미지를 불러올 수 없습니다.</p>
                         </div>
                       </div>
                     )}
@@ -2072,7 +2084,13 @@ function OrderCard({
                         src={selectedOrderForPathology.pathology_analysis.image_url} 
                         alt="병리 이미지"
                         className="max-w-full rounded border"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.parentElement?.querySelector('.pathology-image-fallback');
+                          if (fallback) (fallback as HTMLElement).style.display = 'block';
+                        }}
                       />
+                      <p className="pathology-image-fallback text-sm text-muted-foreground" style={{ display: 'none' }}>이미지를 불러올 수 없습니다.</p>
                     </div>
                   )}
                 </div>
