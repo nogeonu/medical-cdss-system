@@ -56,7 +56,8 @@ urlpatterns = [
     path('pathology/analyze/', csrf_exempt(pathology_views.pathology_ai_analysis), name='analyze-pathology'),
     path('pathology/health/', pathology_views.pathology_ai_health, name='pathology-health'),
     path('pathology/save-result/', pathology_views.save_pathology_result, name='save-pathology-result'),
-    
+    path('pathology/sync-image/', pathology_views.sync_pathology_image_from_worker, name='sync-pathology-image'),
+
     # 병리 이미지 업로드 API
     path('pathology/upload/', csrf_exempt(pathology_upload_views.upload_pathology_image), name='upload-pathology'),
     path('pathology/images/', pathology_upload_views.get_pathology_images, name='get-pathology-images'),
