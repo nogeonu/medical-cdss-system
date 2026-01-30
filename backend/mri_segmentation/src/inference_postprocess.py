@@ -209,7 +209,11 @@ def postprocess_prediction(
                 else:
                     logger.error(f"  - ❌ spatial_shape 없음 - 크기 복원 불가")
         except Exception as e:
-            logger.error(f"  - ❌ Invertd 예외 발생: {e}")
+            import traceback
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+            logger.error(f"  - ❌ Invertd 예외 발생: {error_msg}")
+            logger.debug(f"  - 예외 상세:\n{error_traceback}")
             logger.info(f"  - Fallback으로 수동 복원 시도...")
             # 조원님 제안: spatial_shape를 사용해서 정확한 크기로 리샘플링
             if original_meta_dict is not None and 'spatial_shape' in original_meta_dict:
@@ -336,18 +340,93 @@ def save_as_dicom_seg(mask, output_path, reference_dicom_path, prediction_label=
     # MONAI LoadImage sorts files spatially. InstanceNumber might be inconsistent or reversed.
     def get_z_position(ds):
         # Calculate projection onto slice normal to robustly handle tilted acquisitions
-        iop = ds.ImageOrientationPatient
+        # ImageOrientationPatient 및 ImagePositionPatient 확인 (기존 DICOM에 없을 수 있음)
+        if not hasattr(ds, 'ImageOrientationPatient') or not ds.ImageOrientationPatient:
+            # 기본값: RAS 좌표계
+            iop = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+            logger.warning(f"  ⚠️ ImageOrientationPatient가 없어 기본값 사용: {iop}")
+        else:
+            iop = ds.ImageOrientationPatient
+        
         # Row cosine (x) and Column cosine (y)
         row_cos = np.array(iop[:3])
         col_cos = np.array(iop[3:])
         # Slice normal (z) = cross product
         slice_norm = np.cross(row_cos, col_cos)
-        # Position
-        pos = np.array(ds.ImagePositionPatient)
+        
+        # ImagePositionPatient 확인
+        if not hasattr(ds, 'ImagePositionPatient') or not ds.ImagePositionPatient:
+            # 기본값: SliceLocation 또는 InstanceNumber 사용
+            if hasattr(ds, 'SliceLocation') and ds.SliceLocation:
+                pos = np.array([0.0, 0.0, float(ds.SliceLocation)])
+            elif hasattr(ds, 'InstanceNumber') and ds.InstanceNumber:
+                pos = np.array([0.0, 0.0, float(ds.InstanceNumber)])
+            else:
+                pos = np.array([0.0, 0.0, 0.0])
+            logger.warning(f"  ⚠️ ImagePositionPatient가 없어 기본값 사용: {pos}")
+        else:
+            pos = np.array(ds.ImagePositionPatient)
+        
         # Projection
         return np.dot(pos, slice_norm)
 
     source_images.sort(key=get_z_position)
+    
+    # 소스 이미지에 FrameOfReferenceUID가 있는지 확인 및 추가 (highdicom.Segmentation 필수)
+    logger.info(f"🔍 소스 이미지 FrameOfReferenceUID 확인 중...")
+    frame_of_reference_uid = None
+    
+    # 먼저 기존 FrameOfReferenceUID가 있는지 확인
+    for i, ds in enumerate(source_images):
+        if hasattr(ds, 'FrameOfReferenceUID'):
+            uid_value = ds.FrameOfReferenceUID
+            # 빈 문자열이나 None이 아닌 유효한 UID 확인
+            if uid_value and str(uid_value).strip():
+                frame_of_reference_uid = str(uid_value).strip()
+                logger.info(f"  - 기존 FrameOfReferenceUID 발견 (슬라이스 {i+1}): {frame_of_reference_uid}")
+                break
+            else:
+                logger.debug(f"  - 슬라이스 {i+1}: FrameOfReferenceUID가 빈 값입니다")
+        else:
+            logger.debug(f"  - 슬라이스 {i+1}: FrameOfReferenceUID 속성이 없습니다")
+    
+    # 없으면 새로 생성
+    if not frame_of_reference_uid:
+        from pydicom.uid import generate_uid
+        frame_of_reference_uid = generate_uid()
+        logger.warning(f"  - ⚠️ FrameOfReferenceUID가 없어 새로 생성: {frame_of_reference_uid}")
+    
+    # 모든 소스 이미지에 FrameOfReferenceUID 추가/업데이트 (강제 설정)
+    for i, ds in enumerate(source_images):
+        ds.FrameOfReferenceUID = frame_of_reference_uid
+        # 실제로 설정되었는지 확인
+        if not hasattr(ds, 'FrameOfReferenceUID') or not ds.FrameOfReferenceUID:
+            logger.error(f"  - ❌ 슬라이스 {i+1}에 FrameOfReferenceUID 설정 실패!")
+            raise ValueError(f"Failed to set FrameOfReferenceUID on slice {i+1}")
+    
+    # 최종 검증
+    logger.info(f"  - ✅ 모든 소스 이미지에 FrameOfReferenceUID 설정 완료: {frame_of_reference_uid}")
+    logger.info(f"  - 검증: 첫 번째 이미지 FrameOfReferenceUID = {source_images[0].FrameOfReferenceUID}")
+    logger.info(f"  - 검증: 마지막 이미지 FrameOfReferenceUID = {source_images[-1].FrameOfReferenceUID}")
+    
+    # 소스 이미지에 필수 Study 메타데이터 확인 및 추가 (highdicom.Segmentation에서 필요할 수 있음)
+    logger.info(f"🔍 소스 이미지 Study 메타데이터 확인 중...")
+    for i, ds in enumerate(source_images):
+        # AccessionNumber 확인 및 추가
+        if not hasattr(ds, 'AccessionNumber') or not ds.AccessionNumber:
+            # StudyID를 기반으로 AccessionNumber 생성
+            if hasattr(ds, 'StudyID') and ds.StudyID:
+                ds.AccessionNumber = str(ds.StudyID)
+            else:
+                ds.AccessionNumber = "UNKNOWN"
+            if i == 0:  # 첫 번째 이미지만 로그
+                logger.info(f"  - AccessionNumber 추가: {ds.AccessionNumber}")
+        
+        # ReferringPhysicianName 확인 및 추가 (없으면 빈 문자열)
+        if not hasattr(ds, 'ReferringPhysicianName'):
+            ds.ReferringPhysicianName = ""
+    
+    logger.info(f"  - ✅ 모든 소스 이미지 Study 메타데이터 설정 완료")
     
     # 2. Prepare Mask Data
     # CRITICAL: highdicom.Segmentation expects:
@@ -358,17 +437,22 @@ def save_as_dicom_seg(mask, output_path, reference_dicom_path, prediction_label=
     # We need [D, H, W] for highdicom (Frames=D, Rows=H, Cols=W)
     
     logger.info(f"📦 DICOM SEG 생성 시작")
-    logger.debug(f"  - Input mask shape: {mask.shape}")
-    logger.debug(f"  - Source images count: {len(source_images)}")
+    logger.info(f"  - Input mask shape: {mask.shape}")
+    logger.info(f"  - Source images count: {len(source_images)}")
     
     # Transpose to [D, H, W]
     mask_frames = mask.transpose(2, 0, 1)
-    logger.debug(f"  - Transposed mask shape: {mask_frames.shape}")
+    logger.info(f"  - Transposed mask shape: {mask_frames.shape}")
+    logger.info(f"  - mask_frames dtype: {mask_frames.dtype}")
+    logger.info(f"  - mask_frames min/max: {mask_frames.min()}/{mask_frames.max()}")
     
     # Verify dimensions match
     # Invertd가 정상 작동했다면 차원이 일치해야 함
     # 불일치 시 명확한 에러 메시지로 문제 알림 (안전장치)
     if mask_frames.shape[0] != len(source_images):
+        logger.error(f"  - ❌ 차원 불일치 감지!")
+        logger.error(f"    mask_frames.shape[0] = {mask_frames.shape[0]}")
+        logger.error(f"    len(source_images) = {len(source_images)}")
         raise ValueError(
             f"Dimension mismatch: mask has {mask_frames.shape[0]} frames "
             f"but source_images has {len(source_images)} images. "
@@ -376,6 +460,8 @@ def save_as_dicom_seg(mask, output_path, reference_dicom_path, prediction_label=
             f"This indicates Invertd failed to restore original spacing. "
             f"Please check restore_original_spacing=True and Invertd transform."
         )
+    
+    logger.info(f"  - ✅ 차원 일치 확인: {mask_frames.shape[0]} frames = {len(source_images)} images")
     
     # Ensure boolean type for BINARY segmentation
     mask_frames = mask_frames > 0
@@ -397,6 +483,18 @@ def save_as_dicom_seg(mask, output_path, reference_dicom_path, prediction_label=
     )
     
     # 4. Create Segmentation Object
+    logger.info(f"🔨 highdicom.Segmentation 객체 생성 중...")
+    logger.info(f"  - pixel_array shape: {mask_frames.shape}")
+    logger.info(f"  - pixel_array dtype: {mask_frames.dtype}")
+    logger.info(f"  - source_images 개수: {len(source_images)}")
+    
+    # 첫 번째와 마지막 source_image의 ImagePositionPatient 확인
+    if len(source_images) > 0:
+        first_pos = getattr(source_images[0], 'ImagePositionPatient', 'N/A')
+        last_pos = getattr(source_images[-1], 'ImagePositionPatient', 'N/A')
+        logger.info(f"  - 첫 번째 슬라이스 ImagePositionPatient: {first_pos}")
+        logger.info(f"  - 마지막 슬라이스 ImagePositionPatient: {last_pos}")
+    
     seg_dataset = Segmentation(
         source_images=source_images,
         pixel_array=mask_frames,
@@ -412,7 +510,15 @@ def save_as_dicom_seg(mask, output_path, reference_dicom_path, prediction_label=
         device_serial_number="123456"
     )
     
+    # 생성된 DICOM SEG의 NumberOfFrames 확인
+    num_frames_in_seg = getattr(seg_dataset, 'NumberOfFrames', None)
+    logger.info(f"  - 생성된 DICOM SEG의 NumberOfFrames: {num_frames_in_seg}")
+    
     # 5. Save
     logger.info(f"💾 DICOM SEG 파일 저장 중: {output_path}")
     seg_dataset.save_as(output_path)
     logger.info(f"✅ DICOM SEG 저장 완료: {output_path}")
+    
+    # 저장 후 파일 크기 확인
+    file_size = Path(output_path).stat().st_size
+    logger.info(f"  - 저장된 파일 크기: {file_size / 1024 / 1024:.2f} MB")

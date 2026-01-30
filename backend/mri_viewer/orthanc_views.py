@@ -1,7 +1,9 @@
 """
 Orthanc PACS 서버 연동 API Views
 """
-from rest_framework.decorators import api_view, parser_classes
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.permissions import AllowAny
+from rest_framework.decorators import api_view, parser_classes, authentication_classes, permission_classes
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.response import Response
 from rest_framework import status
@@ -12,6 +14,12 @@ import requests
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+# CSRF 체크를 건너뛰는 커스텀 인증 클래스
+class CSRFExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # CSRF 체크를 건너뜀
 
 
 @api_view(['GET'])
@@ -384,6 +392,271 @@ def orthanc_instance_file(request, instance_id):
 
 
 @api_view(['POST'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
+@parser_classes([MultiPartParser, FormParser])
+def orthanc_upload_dicom_series_folder(request):
+    """
+    DICOM 시리즈 폴더 업로드 (seq_0, seq_1, seq_2, seq_3 구조 지원)
+    
+    POST /api/mri/orthanc/upload-series-folder/
+    Body (multipart/form-data):
+        - files: 여러 DICOM 파일 (폴더 구조 유지)
+        - patient_id: 환자 ID
+        - patient_name: 환자 이름 (선택)
+        - image_type: 영상 유형 (선택)
+    """
+    try:
+        import pydicom
+        from io import BytesIO
+        import re
+        
+        # 여러 파일 가져오기
+        files = request.FILES.getlist('files')
+        file_paths = request.data.getlist('file_paths')  # 프론트엔드에서 전달한 경로 정보
+        patient_id = request.data.get('patient_id')
+        patient_name = request.data.get('patient_name', None)
+        image_type = request.data.get('image_type', None)
+        
+        if not files:
+            return Response({
+                'success': False,
+                'error': '파일이 없습니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not patient_id:
+            return Response({
+                'success': False,
+                'error': '환자 ID가 필요합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 환자 정보 조회
+        if patient_id and not patient_name:
+            try:
+                from patients.models import Patient
+                patient = Patient.objects.filter(patient_id=patient_id).first()
+                if patient:
+                    patient_name = patient.name
+            except Exception as e:
+                logger.warning(f"환자 정보 조회 실패: {e}")
+        
+        if not patient_name:
+            patient_name = patient_id or "UNKNOWN"
+        
+        logger.info(f"📁 DICOM 시리즈 폴더 업로드 시작: {len(files)}개 파일, 환자 ID: {patient_id}")
+        logger.info(f"  - 전달된 file_paths 개수: {len(file_paths)}")
+        
+        # 파일 경로 정보 확인
+        if len(file_paths) > 0:
+            logger.info(f"  - 파일 경로 샘플 (처음 5개): {file_paths[:5]}")
+        else:
+            logger.warning(f"  - ⚠️ file_paths가 비어있습니다. 파일 이름만 사용합니다.")
+        
+        client = OrthancClient()
+        
+        # 파일들을 seq 폴더별로 그룹화
+        # 파일 경로 정보를 사용하여 seq_0, seq_1 등을 추출
+        seq_groups = {}  # {seq_number: [files]}
+        
+        for idx, file in enumerate(files):
+            # 프론트엔드에서 전달한 경로 정보 사용 (있으면)
+            file_path = file_paths[idx] if idx < len(file_paths) else file.name
+            
+            # 디버깅: 처음 10개 파일의 경로 로깅
+            if idx < 10:
+                logger.debug(f"  - 파일 {idx+1}: {file.name} → 경로: {file_path}")
+            
+            # seq_0, seq_1, seq_2, seq_3 패턴 찾기
+            seq_match = re.search(r'seq[_\s]*(\d+)', file_path, re.IGNORECASE)
+            if seq_match:
+                seq_num = int(seq_match.group(1))
+            else:
+                # seq 패턴이 없으면 파일 경로에서 추출 시도
+                # 예: "ISPY2_213913_DICOM_4CH/seq_0/slice_0000.dcm"
+                path_parts = file_path.replace('\\', '/').split('/')
+                seq_num = None
+                for part in path_parts:
+                    seq_match = re.search(r'seq[_\s]*(\d+)', part, re.IGNORECASE)
+                    if seq_match:
+                        seq_num = int(seq_match.group(1))
+                        break
+                
+                if seq_num is None:
+                    # seq 패턴을 찾을 수 없으면 seq_0으로 기본값 설정
+                    seq_num = 0
+                    logger.warning(f"seq 패턴을 찾을 수 없어 seq_0으로 설정: {file_path}")
+            
+            if seq_num not in seq_groups:
+                seq_groups[seq_num] = []
+            seq_groups[seq_num].append(file)
+        
+        logger.info(f"  - 발견된 시리즈: {sorted(seq_groups.keys())}")
+        total_files_in_groups = 0
+        for seq_num, seq_files in seq_groups.items():
+            logger.info(f"  - seq_{seq_num}: {len(seq_files)}개 파일")
+            total_files_in_groups += len(seq_files)
+        
+        # 파일 개수 검증
+        if total_files_in_groups != len(files):
+            logger.warning(f"  - ⚠️ 경고: 그룹화된 파일 수({total_files_in_groups})와 전체 파일 수({len(files)})가 일치하지 않습니다!")
+        else:
+            logger.info(f"  - ✅ 모든 파일이 시리즈별로 그룹화되었습니다: 총 {total_files_in_groups}개 파일")
+        
+        # 각 시리즈별로 업로드 및 시리즈 정보 추출
+        uploaded_series = {}
+        all_uploaded_instances = []
+        failed_files = []
+        
+        # StudyInstanceUID 생성 (모든 시리즈가 같은 Study에 속하도록)
+        from pydicom.uid import generate_uid
+        study_instance_uid = generate_uid()
+        
+        for seq_num in sorted(seq_groups.keys()):
+            seq_files = seq_groups[seq_num]
+            # 파일 이름으로 정렬 (슬라이스 순서 보장)
+            seq_files.sort(key=lambda f: f.name)
+            
+            series_instances = []
+            series_errors = []
+            
+            # 각 seq 폴더마다 고유한 SeriesInstanceUID 생성
+            series_instance_uid = generate_uid()
+            series_number = seq_num + 1  # SeriesNumber는 1부터 시작
+            series_description = f"DCE-MRI Sequence {seq_num}"
+            
+            logger.info(f"  📦 seq_{seq_num} 처리 시작: {len(seq_files)}개 파일, SeriesInstanceUID: {series_instance_uid}")
+            
+            uploaded_count = 0
+            for file_idx, file in enumerate(seq_files):
+                try:
+                    # 파일 읽기 (Django UploadedFile은 seek 가능)
+                    if hasattr(file, 'seek'):
+                        file.seek(0)  # 파일 포인터를 처음으로
+                    file_data = file.read()
+                    
+                    if len(file_data) == 0:
+                        logger.warning(f"  ⚠️ seq_{seq_num} 파일 {file_idx+1}: 빈 파일 - {file.name}")
+                        continue
+                    
+                    # DICOM 파일 읽기 및 수정
+                    try:
+                        dicom_file = pydicom.dcmread(BytesIO(file_data))
+                        
+                        # patient_id가 제공된 경우 DICOM 파일의 태그 수정
+                        if patient_id:
+                            dicom_file.SpecificCharacterSet = 'ISO_IR 192'  # UTF-8
+                            dicom_file.PatientID = str(patient_id)
+                            dicom_file.PatientName = str(patient_name)
+                        
+                        # 모든 파일에 동일한 StudyInstanceUID 설정
+                        dicom_file.StudyInstanceUID = study_instance_uid
+                        
+                        # 각 seq 폴더의 모든 파일에 동일한 SeriesInstanceUID 설정
+                        dicom_file.SeriesInstanceUID = series_instance_uid
+                        dicom_file.SeriesNumber = str(series_number)
+                        dicom_file.SeriesDescription = series_description
+                        
+                        # InstanceNumber 설정 (파일 순서대로)
+                        dicom_file.InstanceNumber = str(file_idx + 1)
+                        
+                        # 수정된 DICOM을 바이트로 변환
+                        output = BytesIO()
+                        pydicom.dcmwrite(output, dicom_file, write_like_original=False)
+                        file_data = output.getvalue()
+                        
+                    except Exception as e:
+                        logger.warning(f"  ⚠️ DICOM 파일 처리 실패: {file.name} - {e}")
+                        # DICOM이 아니어도 원본 그대로 업로드 시도
+                    
+                    # Orthanc에 업로드
+                    result = client.upload_dicom(file_data)
+                    instance_id = result['ID']
+                    series_instances.append(instance_id)
+                    all_uploaded_instances.append(instance_id)
+                    uploaded_count += 1
+                    
+                    # 진행 상황 로깅 (10개마다)
+                    if (file_idx + 1) % 10 == 0 or (file_idx + 1) == len(seq_files):
+                        logger.info(f"  📤 seq_{seq_num} 진행: {file_idx + 1}/{len(seq_files)} ({uploaded_count}개 업로드 완료)")
+                    
+                except Exception as e:
+                    error_msg = f"{file.name}: {str(e)}"
+                    logger.error(f"  ❌ {error_msg}")
+                    series_errors.append(error_msg)
+                    failed_files.append({
+                        'file_name': file.name,
+                        'seq': seq_num,
+                        'error': str(e)
+                    })
+                    continue
+            
+            if series_instances:
+                # 시리즈 정보 추출 (첫 번째 인스턴스에서)
+                try:
+                    first_instance_info = client.get_instance_info(series_instances[0])
+                    series_info = client.get(f"/instances/{series_instances[0]}/series")
+                    series_id = series_info if isinstance(series_info, str) else series_info.get('ID', 'Unknown')
+                    
+                    uploaded_series[seq_num] = {
+                        'series_id': series_id,
+                        'instance_count': len(series_instances),
+                        'instances': series_instances,
+                        'errors': series_errors
+                    }
+                    logger.info(f"  ✅ seq_{seq_num}: {len(series_instances)}/{len(seq_files)}개 인스턴스 업로드 완료 (Series ID: {series_id})")
+                    if len(series_errors) > 0:
+                        logger.warning(f"  ⚠️ seq_{seq_num}: {len(series_errors)}개 파일 업로드 실패")
+                except Exception as e:
+                    logger.warning(f"  ⚠️ seq_{seq_num} 시리즈 정보 추출 실패: {e}")
+                    uploaded_series[seq_num] = {
+                        'series_id': 'Unknown',
+                        'instance_count': len(series_instances),
+                        'instances': series_instances,
+                        'errors': series_errors
+                    }
+            else:
+                logger.error(f"  ❌ seq_{seq_num}: 모든 파일 업로드 실패")
+        
+        # 최종 요약 로깅
+        total_expected = len(files)
+        total_uploaded = len(all_uploaded_instances)
+        logger.info(f"📊 업로드 완료 요약:")
+        logger.info(f"  - 전체 파일 수: {total_expected}개")
+        logger.info(f"  - 업로드 성공: {total_uploaded}개")
+        logger.info(f"  - 업로드 실패: {len(failed_files)}개")
+        logger.info(f"  - 시리즈 수: {len(uploaded_series)}개")
+        
+        if total_uploaded < total_expected:
+            logger.warning(f"  ⚠️ 일부 파일이 업로드되지 않았습니다: {total_uploaded}/{total_expected}")
+        
+        return Response({
+            'success': True,
+            'uploaded_series': uploaded_series,
+            'total_instances': len(all_uploaded_instances),
+            'total_files': len(files),  # 전체 파일 수 추가
+            'failed_count': len(failed_files),
+            'failed_files': failed_files,
+            'patient_id': patient_id,
+            'patient_name': patient_name,
+            'message': f'{len(uploaded_series)}개 시리즈, {len(all_uploaded_instances)}/{len(files)}개 파일 업로드 완료'
+        })
+        
+    except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"❌ DICOM 시리즈 폴더 업로드 실패: {str(e)}", exc_info=True)
+        logger.error(f"상세 에러:\n{error_traceback}")
+        return Response({
+            'success': False,
+            'error': f'업로드 중 오류가 발생했습니다: {str(e)}',
+            'error_type': type(e).__name__,
+            'traceback': error_traceback if logger.level <= logging.DEBUG else None
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 def orthanc_upload_dicom_folder(request):
     """
@@ -484,9 +757,11 @@ def orthanc_upload_dicom_folder(request):
 
 
 @api_view(['POST'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
 @parser_classes([MultiPartParser, FormParser])
 def orthanc_upload_dicom(request):
-    """DICOM 또는 NIfTI 파일 업로드"""
+    """DICOM 파일만 업로드 (NIfTI 지원 제거)"""
     try:
         # 디버깅 로그
         print(f"Request method: {request.method}")
@@ -502,179 +777,88 @@ def orthanc_upload_dicom(request):
         patient_id = request.data.get('patient_id', None)
         image_type = request.data.get('image_type', None)  # 영상 유형 추가
         
+        # NIfTI 파일 거부
+        if file_name.endswith('.nii') or file_name.endswith('.nii.gz'):
+            return Response({
+                'success': False,
+                'error': 'NIfTI 파일은 더 이상 지원되지 않습니다. DICOM 파일만 업로드 가능합니다.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
         # 환자 이름 조회: 프론트엔드에서 전달한 값을 우선 사용, 없으면 DB에서 조회
         patient_name = request.data.get('patient_name', None)
-        if not patient_name and patient_id:
+        birth_date = None
+        gender = None
+        
+        if patient_id:
             try:
                 from patients.models import Patient
                 patient = Patient.objects.filter(patient_id=patient_id).first()
                 if patient:
-                    patient_name = patient.name
-                    print(f"Found patient name from DB for {patient_id}: {patient_name}")
-                else:
-                    print(f"Patient ID {patient_id} not found in database, using ID as name")
-                    patient_name = patient_id
+                    if not patient_name:
+                        patient_name = patient.name
+                    birth_date = patient.birth_date
+                    gender = patient.gender
+                    print(f"Enriching metadata from DB for {patient_id}: Name={patient_name}, Birth={birth_date}, Gender={gender}")
             except Exception as e:
-                print(f"Error fetching patient name: {e}")
-                patient_name = patient_id or "UNKNOWN"
-        elif not patient_name:
+                print(f"Error fetching patient data: {e}")
+        
+        if not patient_name:
             patient_name = patient_id or "UNKNOWN"
 
-        print(f"Uploading file: {file_name}, patient: {patient_name} ({patient_id})")
+        print(f"Uploading DICOM file: {file_name}, patient: {patient_name} ({patient_id})")
         
         client = OrthancClient()
         
-        # 파일 확장자 확인
-        if file_name.endswith('.nii') or file_name.endswith('.nii.gz'):
-            # NIfTI 파일인 경우 DICOM으로 변환
+        # DICOM 파일인 경우
+        dicom_data = uploaded_file.read()
+        
+        # patient_id가 제공된 경우 DICOM 파일의 PatientID 태그 수정
+        if patient_id:
             try:
-                from .utils import nifti_to_dicom_slices
+                import pydicom
                 from io import BytesIO
                 
-                # 파일을 메모리로 읽기
-                file_data = uploaded_file.read()
+                # DICOM 파일 읽기
+                dicom_file = pydicom.dcmread(BytesIO(dicom_data))
                 
-                if len(file_data) == 0:
-                    return Response({
-                        'success': False,
-                        'error': 'Uploaded file is empty'
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                # 한글 지원을 위해 문자셋 설정
+                dicom_file.SpecificCharacterSet = 'ISO_IR 192'  # UTF-8
                 
-                # BytesIO 객체 생성 (파일 이름 정보 포함)
-                nifti_bytesio = BytesIO(file_data)
-                nifti_bytesio.name = uploaded_file.name  # 파일 이름 저장 (확장자 확인용)
+                # PatientID와 PatientName 수정
+                dicom_file.PatientID = str(patient_id)
+                dicom_file.PatientName = str(patient_name)  # DB에서 가져온 실제 이름 사용
                 
-                # NIfTI를 DICOM 슬라이스들로 변환
-                try:
-                    print(f"Starting NIfTI conversion for file: {uploaded_file.name}, size: {len(file_data)} bytes")
-                    dicom_slices = nifti_to_dicom_slices(
-                        nifti_bytesio,
-                        patient_id=patient_id or "UNKNOWN",
-                        patient_name=patient_name,  # DB에서 찾은 이름 전달
-                        image_type=image_type,  # 영상 유형 전달
-                        orthanc_client=client  # 기존 Study 재사용을 위해 전달
-                    )
-                    print(f"NIfTI conversion successful: {len(dicom_slices)} DICOM slices created")
-                except Exception as e:
-                    import sys
-                    error_type = type(e).__name__
-                    error_msg = str(e)
-                    error_traceback = traceback.format_exc()
-                    print(f"❌ NIfTI conversion failed:")
-                    print(f"   Error type: {error_type}")
-                    print(f"   Error message: {error_msg}")
-                    print(f"   Traceback:\n{error_traceback}")
-                    return Response({
-                        'success': False,
-                        'error': f'NIfTI 파일 변환 실패: {error_msg}',
-                        'error_type': error_type,
-                        'traceback': error_traceback
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                print(f"Modifying DICOM tags: ID={patient_id}, Name={patient_name}")
                 
-                if not dicom_slices or len(dicom_slices) == 0:
-                    return Response({
-                        'success': False,
-                        'error': 'DICOM 슬라이스 변환 결과가 비어있습니다.'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-                
-                # 각 DICOM 슬라이스를 Orthanc에 업로드
-                uploaded_count = 0
-                errors = []
-                uploaded_instance_ids = []  # 업로드된 인스턴스 ID 저장
-                for idx, dicom_slice in enumerate(dicom_slices):
-                    try:
-                        result = client.upload_dicom(dicom_slice)
-                        uploaded_count += 1
-                        if 'ID' in result:
-                            uploaded_instance_ids.append(result['ID'])
-                    except Exception as e:
-                        error_msg = f"슬라이스 {idx+1} 업로드 실패: {str(e)}"
-                        errors.append(error_msg)
-                        print(error_msg)
-                        continue
-                
-                # 업로드된 첫 번째 인스턴스의 PatientID 확인
-                actual_patient_id = patient_id or "UNKNOWN"
-                if uploaded_instance_ids:
-                    try:
-                        first_instance = client.get_instance_info(uploaded_instance_ids[0])
-                        tags = first_instance.get('MainDicomTags', {})
-                        actual_patient_id = tags.get('PatientID', patient_id or "UNKNOWN")
-                    except Exception as e:
-                        print(f"PatientID 확인 중 오류: {e}")
-                
-                if uploaded_count == 0:
-                    return Response({
-                        'success': False,
-                        'error': '모든 슬라이스 업로드 실패',
-                        'errors': errors
-                    }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-                
-                return Response({
-                    'success': True,
-                    'message': f'NIfTI 파일이 변환되어 업로드되었습니다. {uploaded_count}/{len(dicom_slices)} 슬라이스 업로드 완료.',
-                    'slices_uploaded': uploaded_count,
-                    'patient_id': actual_patient_id,
-                    'patient_name': patient_name,
-                    'errors': errors if errors else None
-                })
+                # 수정된 DICOM을 바이트로 변환
+                output = BytesIO()
+                pydicom.dcmwrite(output, dicom_file, write_like_original=False)
+                dicom_data = output.getvalue()
             except Exception as e:
-                return Response({
-                    'success': False,
-                    'error': f'NIfTI 파일 처리 중 오류: {str(e)}',
-                    'traceback': traceback.format_exc()
-                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        else:
-            # DICOM 파일인 경우
-            dicom_data = uploaded_file.read()
-            
-            # patient_id가 제공된 경우 DICOM 파일의 PatientID 태그 수정
-            if patient_id:
-                try:
-                    import pydicom
-                    from io import BytesIO
-                    
-                    # DICOM 파일 읽기
-                    dicom_file = pydicom.dcmread(BytesIO(dicom_data))
-                    
-                    # 한글 지원을 위해 문자셋 설정
-                    dicom_file.SpecificCharacterSet = 'ISO_IR 192'  # UTF-8
-                    
-                    # PatientID와 PatientName 수정
-                    dicom_file.PatientID = str(patient_id)
-                    dicom_file.PatientName = str(patient_name)  # DB에서 가져온 실제 이름 사용
-                    
-                    print(f"Modifying DICOM tags: ID={patient_id}, Name={patient_name}")
-                    
-                    # 수정된 DICOM을 바이트로 변환
-                    output = BytesIO()
-                    pydicom.dcmwrite(output, dicom_file, write_like_original=False)
-                    dicom_data = output.getvalue()
-                except Exception as e:
-                    print(f"DICOM 파일 태그 수정 실패 (원본 파일 그대로 업로드): {e}")
-            
-            # Orthanc에 업로드
-            result = client.upload_dicom(dicom_data)
-            
-            # 업로드된 인스턴스의 Patient ID 확인
-            actual_patient_id = patient_id or "UNKNOWN"
-            try:
-                if 'ID' in result:
-                    instance_id = result['ID']
-                    instance_info = client.get_instance_info(instance_id)
-                    tags = instance_info.get('MainDicomTags', {})
-                    if 'PatientID' in tags:
-                        actual_patient_id = tags['PatientID']
-            except Exception as e:
-                print(f"Patient ID 확인 중 오류 (무시): {e}")
-            
-            return Response({
-                'success': True,
-                'result': result,
-                'patient_id': actual_patient_id,
-                'patient_name': patient_name,
-                'message': 'DICOM file uploaded successfully'
-            })
+                print(f"DICOM 파일 태그 수정 실패 (원본 파일 그대로 업로드): {e}")
+        
+        # Orthanc에 업로드
+        result = client.upload_dicom(dicom_data)
+        
+        # 업로드된 인스턴스의 Patient ID 확인
+        actual_patient_id = patient_id or "UNKNOWN"
+        try:
+            if 'ID' in result:
+                instance_id = result['ID']
+                instance_info = client.get_instance_info(instance_id)
+                tags = instance_info.get('MainDicomTags', {})
+                if 'PatientID' in tags:
+                    actual_patient_id = tags['PatientID']
+        except Exception as e:
+            print(f"Patient ID 확인 중 오류 (무시): {e}")
+        
+        return Response({
+            'success': True,
+            'result': result,
+            'patient_id': actual_patient_id,
+            'patient_name': patient_name,
+            'message': 'DICOM file uploaded successfully'
+        })
     except Exception as e:
         return Response({
             'success': False,
@@ -777,96 +961,4 @@ def orthanc_run_segmentation(request, patient_id):
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-@api_view(['DELETE'])
-def orthanc_delete_patient(request, patient_id):
-    """환자 데이터 삭제"""
-    try:
-        client = OrthancClient()
-        client.delete_patient(patient_id)
-        
-        return Response({
-            'success': True,
-            'message': f'Patient {patient_id} deleted successfully'
-        })
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['GET'])
-def orthanc_segmentation(request, patient_id):
-    """
-    환자의 세그멘테이션 데이터 조회
-    향후 AI 모델 연동 시 실제 세그멘테이션 결과 반환
-    """
-    try:
-        # TODO: 실제 AI 모델 세그멘테이션 로직 추가
-        # 현재는 세그멘테이션 준비 상태만 반환
-        client = OrthancClient()
-        patient = client.find_patient_by_patient_id(patient_id)
-        
-        if not patient:
-            return Response({
-                'success': False,
-                'error': 'Patient not found'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        # 세그멘테이션 데이터 준비 중 (추후 실제 데이터로 대체)
-        return Response({
-            'success': True,
-            'patient_id': patient_id,
-            'segmentation_available': False,  # 실제 모델 연동 후 True로 변경
-            'message': 'AI 세그멘테이션 모델 준비 중입니다.',
-            'segmentation_data': None  # 실제 세그멘테이션 결과가 들어갈 위치
-        })
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-@api_view(['POST'])
-def orthanc_run_segmentation(request, patient_id):
-    """
-    환자의 DICOM 이미지에 대해 AI 세그멘테이션 실행
-    향후 실제 AI 모델 통합 예정
-    """
-    try:
-        client = OrthancClient()
-        patient = client.find_patient_by_patient_id(patient_id)
-        
-        if not patient:
-            return Response({
-                'success': False,
-                'error': 'Patient not found'
-            }, status=status.HTTP_404_NOT_FOUND)
-        
-        # TODO: 실제 AI 모델 세그멘테이션 실행 로직
-        # 1. Orthanc에서 DICOM 이미지 가져오기
-        # 2. AI 모델에 전달하여 세그멘테이션 실행
-        # 3. 결과를 Orthanc에 저장 또는 별도 저장소에 저장
-        # 4. 세그멘테이션 결과 메타데이터 반환
-        
-        import time
-        time.sleep(2)  # 시뮬레이션 지연
-        
-        return Response({
-            'success': True,
-            'patient_id': patient_id,
-            'segmentation_complete': True,
-            'message': 'AI 세그멘테이션이 완료되었습니다. (시뮬레이션)',
-            'result': {
-                'tumor_detected': True,
-                'tumor_volume_mm3': 1234.56,
-                'confidence': 0.92
-            }
-        })
-    except Exception as e:
-        return Response({
-            'success': False,
-            'error': str(e)
-        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

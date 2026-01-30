@@ -189,6 +189,20 @@ export default function ReservationInfo() {
     }
   }, [openCreate, doctors.length, loadingDoctors, fetchDoctors]);
 
+  // 예약 생성 이벤트 리스닝 (다른 페이지에서 예약 생성 시 자동 새로고침)
+  useEffect(() => {
+    const handleAppointmentCreated = () => {
+      console.log("📅 예약 생성 이벤트 수신 - 예약 목록 새로고침");
+      refresh();
+    };
+
+    window.addEventListener('appointment-created', handleAppointmentCreated);
+    
+    return () => {
+      window.removeEventListener('appointment-created', handleAppointmentCreated);
+    };
+  }, [refresh]);
+
   useEffect(() => {
     const searchPatients = async () => {
       if (!patientSearchTerm.trim()) {

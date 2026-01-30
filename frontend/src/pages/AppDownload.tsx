@@ -169,6 +169,15 @@ export default function AppDownload() {
 
             {!loading && !error && release && (apkAsset || ipaAsset) && (
               <div className="space-y-6">
+                {/* 앱 이미지 */}
+                <div className="flex justify-center mb-6 w-full">
+                  <img 
+                    src="/images/phone1.png" 
+                    alt="CDSS Mobile App" 
+                    className="w-full max-w-4xl h-auto object-contain"
+                  />
+                </div>
+                
                 {/* 버전 정보 헤더 */}
                 <div className="flex items-start gap-3 pb-6 border-b border-slate-200">
                   <Download className="h-5 w-5 text-primary mt-1" />

@@ -20,6 +20,8 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import CornerstoneViewer from "@/components/CornerstoneViewer";
+import Volume3DViewer from "@/components/Volume3DViewer";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface OrthancImage {
   instance_id: string;
@@ -78,10 +80,41 @@ export default function MRIImageDetail() {
   const [segmentationStartIndex, setSegmentationStartIndex] = useState<{[seriesId: string]: number}>({});
   const [overlayOpacity, setOverlayOpacity] = useState(0.5);
   const [hasSegmentationFile, setHasSegmentationFile] = useState(false);  // SEG 파일 존재 여부
+  const [viewMode, setViewMode] = useState<"2d" | "3d">("2d");  // 2D 또는 3D 뷰 모드
 
   // 현재 선택된 Series의 이미지들
   const currentImages = seriesGroups[selectedSeriesIndex]?.images || [];
   const currentImage = currentImages[selectedImageIndex];
+  
+  // 세그멘테이션 인스턴스 ID 찾기 (Orthanc에 저장된 DICOM SEG 파일)
+  // 주의: SEG 파일은 별도의 시리즈(9999)에 있으므로 allOrthancImages에서 찾아야 함
+  const segmentationInstanceId = allOrthancImages.find(img => img.is_segmentation || img.modality === 'SEG')?.instance_id;
+  
+  // 디버깅: 세그멘테이션 인스턴스 ID 확인
+  useEffect(() => {
+    console.log('[MRIImageDetail] 🔍 세그멘테이션 인스턴스 ID 검색 중...', {
+      allOrthancImagesCount: allOrthancImages.length,
+      allOrthancImages: allOrthancImages.map(img => ({
+        instance_id: img.instance_id,
+        is_segmentation: img.is_segmentation,
+        modality: img.modality,
+        series_description: img.series_description,
+      })),
+    });
+    
+    if (segmentationInstanceId) {
+      console.log('[MRIImageDetail] ✅ 세그멘테이션 인스턴스 ID 발견:', segmentationInstanceId);
+    } else {
+      console.warn('[MRIImageDetail] ⚠️ 세그멘테이션 인스턴스 ID 없음');
+      const segImages = allOrthancImages.filter(img => img.is_segmentation || img.modality === 'SEG');
+      console.log('[MRIImageDetail] SEG 파일 후보:', segImages.map(img => ({
+        instance_id: img.instance_id,
+        is_segmentation: img.is_segmentation,
+        modality: img.modality,
+        series_description: img.series_description,
+      })));
+    }
+  }, [segmentationInstanceId, allOrthancImages]);
 
   useEffect(() => {
     if (patientId) {
@@ -272,19 +305,32 @@ export default function MRIImageDetail() {
           throw new Error('병리 이미지를 찾을 수 없습니다.');
         }
 
+        // series_description에서 파일명 추출
+        // 형식: "Pathology WSI - filename.svs"
+        let filename = '';
+        const seriesDesc = currentSeries.series_description || '';
+        if (seriesDesc.includes(' - ')) {
+          filename = seriesDesc.split(' - ')[1];  // "filename.svs"
+        } else {
+          // series_description에 파일명이 없으면 instance_id를 filename으로 사용
+          // (교육원 워커가 알아서 매칭하도록)
+          filename = instanceId;
+        }
+
         toast({
           title: "병리 이미지 분석 시작",
           description: "AI 모델이 조직 이미지를 분석하고 있습니다... (약 1-2분 소요)",
         });
 
-        // 병리 AI 분석 API 호출 (instance_id만 전달)
+        // 병리 AI 분석 API 호출 (instance_id와 filename 전달)
         const response = await fetch(`/api/mri/pathology/analyze/`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            instance_id: instanceId
+            instance_id: instanceId,
+            filename: filename  // 교육원 워커가 wsi/ 폴더에서 찾을 파일명
           }),
         });
 
@@ -338,6 +384,7 @@ export default function MRIImageDetail() {
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include', // 쿠키 포함 (인증 정보)
           body: JSON.stringify({
             instance_ids: instanceIds
           }),
@@ -453,7 +500,9 @@ export default function MRIImageDetail() {
 
       toast({
         title: "시리즈 세그멘테이션 완료",
-        description: `${data.successful_slices}/${data.total_slices} 슬라이스 분석 완료. 병변 탐지 버튼으로 오버레이를 확인하세요.`,
+        description: data.successful_slices !== undefined && data.total_slices !== undefined
+          ? `${data.successful_slices}/${data.total_slices} 슬라이스 분석 완료. 병변 탐지 버튼으로 오버레이를 확인하세요.`
+          : `분석 완료. 병변 탐지 버튼으로 오버레이를 확인하세요.`,
       });
     } catch (error) {
       console.error('시리즈 세그멘테이션 오류:', error);
@@ -727,40 +776,89 @@ export default function MRIImageDetail() {
               }`}>
               <CardContent className={`p-0 h-full ${isFullscreen ? 'h-screen' : ''}`}>
                 {currentImages.length > 0 ? (
-                  <div className="relative h-full">
-                    {(() => {
-                      // 현재 시리즈의 세그멘테이션 프레임 가져오기
-                      const currentSeriesId = seriesGroups[selectedSeriesIndex]?.series_id;
-                      const frames = currentSeriesId ? segmentationFrames[currentSeriesId] : undefined;
-                      
-                      // 프레임 인덱스 매핑 (슬라이스 인덱스 → 프레임 인덱스)
-                      // SEG 파일의 프레임은 보통 0부터 시작하므로, 슬라이스 인덱스와 직접 매핑
-                      let mappedFrames: Array<{index: number; mask_base64: string}> | undefined = undefined;
-                      
-                      if (frames && frames.length > 0) {
-                        // 프레임을 슬라이스 인덱스에 맞게 매핑
-                        mappedFrames = frames.map((frame: any, idx: number) => ({
-                          index: idx,  // 슬라이스 인덱스와 동일하게 매핑
-                          mask_base64: frame.mask_base64 || frame.mask || ''
-                        }));
-                        console.log(`[MRIImageDetail] 세그멘테이션 프레임 매핑: seriesId=${currentSeriesId}, frames=${frames.length}, mapped=${mappedFrames.length}, showSegmentation=${showSegmentationOverlay}, selectedImageIndex=${selectedImageIndex}`);
-                        console.log(`[MRIImageDetail] mappedFrames 샘플:`, mappedFrames.slice(0, 3).map((f: any) => ({ index: f.index, hasMask: !!f.mask_base64 })));
-                      } else {
-                        console.log(`[MRIImageDetail] 세그멘테이션 프레임 없음: seriesId=${currentSeriesId}, frames=${frames ? 'undefined' : 'null'}, segmentationFrames keys:`, Object.keys(segmentationFrames));
-                      }
-                      
-                      return (
-                        <CornerstoneViewer
-                          key={`viewer-${currentSeriesId}-${currentImages.length}-${showSegmentationOverlay}`}
-                          instanceIds={currentImages.map(img => img.instance_id)}
-                          currentIndex={selectedImageIndex}
-                          onIndexChange={setSelectedImageIndex}
-                          showMeasurementTools={true}
-                          showSegmentation={showSegmentationOverlay && !!mappedFrames}
-                          segmentationFrames={mappedFrames || []}
-                        />
-                      );
-                    })()}
+                  <div className="relative h-full flex flex-col">
+                    {/* 뷰 모드 탭 */}
+                    <div className="p-4 border-b border-gray-800">
+                      <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as "2d" | "3d")}>
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="2d">2D 슬라이스 뷰</TabsTrigger>
+                          <TabsTrigger value="3d">3D 볼륨 뷰</TabsTrigger>
+                        </TabsList>
+                      </Tabs>
+                    </div>
+
+                    {/* 뷰어 콘텐츠 */}
+                    <div className="flex-1 relative">
+                      {viewMode === "2d" ? (
+                        <div className="relative h-full">
+                          {(() => {
+                            // 현재 시리즈의 세그멘테이션 프레임 가져오기
+                            const currentSeriesId = seriesGroups[selectedSeriesIndex]?.series_id;
+                            const frames = currentSeriesId ? segmentationFrames[currentSeriesId] : undefined;
+                            
+                            // 프레임 인덱스 매핑 (슬라이스 인덱스 → 프레임 인덱스)
+                            // SEG 파일의 프레임은 보통 0부터 시작하므로, 슬라이스 인덱스와 직접 매핑
+                            let mappedFrames: Array<{index: number; mask_base64: string}> | undefined = undefined;
+                            
+                            if (frames && frames.length > 0) {
+                              // 프레임을 슬라이스 인덱스에 맞게 매핑
+                              mappedFrames = frames.map((frame: any, idx: number) => ({
+                                index: idx,  // 슬라이스 인덱스와 동일하게 매핑
+                                mask_base64: frame.mask_base64 || frame.mask || ''
+                              }));
+                              console.log(`[MRIImageDetail] 세그멘테이션 프레임 매핑: seriesId=${currentSeriesId}, frames=${frames.length}, mapped=${mappedFrames.length}, showSegmentation=${showSegmentationOverlay}, selectedImageIndex=${selectedImageIndex}`);
+                              console.log(`[MRIImageDetail] mappedFrames 샘플:`, mappedFrames.slice(0, 3).map((f: any) => ({ index: f.index, hasMask: !!f.mask_base64 })));
+                            } else {
+                              console.log(`[MRIImageDetail] 세그멘테이션 프레임 없음: seriesId=${currentSeriesId}, frames=${frames ? 'undefined' : 'null'}, segmentationFrames keys:`, Object.keys(segmentationFrames));
+                            }
+                            
+                            return (
+                              <CornerstoneViewer
+                                key={`viewer-${currentSeriesId}-${currentImages.length}-${showSegmentationOverlay}`}
+                                instanceIds={currentImages.map(img => img.instance_id)}
+                                currentIndex={selectedImageIndex}
+                                onIndexChange={setSelectedImageIndex}
+                                showMeasurementTools={true}
+                                showSegmentation={showSegmentationOverlay && !!mappedFrames}
+                                segmentationFrames={mappedFrames || []}
+                              />
+                            );
+                          })()}
+                        </div>
+                      ) : viewMode === "3d" ? (
+                        <div className="h-full">
+                          {(() => {
+                            const currentSeriesId = seriesGroups[selectedSeriesIndex]?.series_id;
+                            const frames = currentSeriesId ? segmentationFrames[currentSeriesId] : undefined;
+                            const mappedFrames = frames && frames.length > 0 
+                              ? frames.map((frame: any, idx: number) => ({
+                                  index: idx,
+                                  mask_base64: frame.mask_base64 || frame.mask || ''
+                                }))
+                              : [];
+                            
+                            return (
+                              <Volume3DViewer
+                                instanceIds={currentImages.filter(img => !img.is_segmentation).map(img => img.instance_id)}
+                                segmentationInstanceId={segmentationInstanceId}
+                                segmentationFrames={mappedFrames}
+                                patientId={patientId}
+                              />
+                            );
+                          })()}
+                          {currentImages.length === 0 && (
+                            <div className="flex items-center justify-center h-full text-gray-400">
+                              <p>DICOM 이미지가 없습니다</p>
+                            </div>
+                          )}
+                          {currentImages.filter(img => !img.is_segmentation).length === 0 && (
+                            <div className="flex items-center justify-center h-full text-yellow-400">
+                              <p>⚠️ DICOM 이미지를 찾을 수 없습니다. 세그멘테이션만 있습니다.</p>
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
                     
                     {isFullscreen && (
                       <Button

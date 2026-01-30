@@ -1,7 +1,7 @@
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import { 
-  Users, 
-  LogOut, 
+import {
+  Users,
+  LogOut,
   Brain,
   Activity,
   Stethoscope,
@@ -39,6 +39,12 @@ const departmentNavigation = {
     { name: "예약 정보", href: "/reservation-info", icon: CalendarDays },
     { name: "처방전달시스템", href: "/ocs", icon: FileText },
   ],
+  검사실: [
+    { name: "검사실 대시보드", href: "/laboratory-dashboard", icon: Activity },
+    { name: "AI 분석", href: "/laboratory-ai-analysis", icon: Brain },
+    { name: "병리이미지분석", href: "/pathology-analysis", icon: Scan },
+    { name: "처방전달시스템", href: "/ocs", icon: FileText },
+  ],
 };
 
 const adminNavigation = [
@@ -61,9 +67,9 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate('/', { replace: true });
+      navigate('/medical_staff', { replace: true });
     } catch {
-      navigate('/', { replace: true });
+      navigate('/medical_staff', { replace: true });
     }
   };
 
@@ -78,17 +84,27 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
     if (user.role === 'admin_staff') {
       departmentMenuItems = adminNavigation;
     } else if (user.role === 'medical_staff') {
-      const deptMenu = departmentNavigation[user.department as keyof typeof departmentNavigation];
+      // department 값 정규화 (공백 제거, 대소문자 무시)
+      const normalizedDept = user.department?.trim();
+      const deptMenu = departmentNavigation[normalizedDept as keyof typeof departmentNavigation];
       departmentMenuItems = deptMenu || departmentNavigation['외과'];
+
+      // 디버깅용 로그 (개발 환경에서만)
+      if (process.env.NODE_ENV === 'development' && normalizedDept === '검사실' && !deptMenu) {
+        console.warn('검사실 메뉴를 찾을 수 없습니다. department 값:', normalizedDept, '사용 가능한 키:', Object.keys(departmentNavigation));
+      }
     }
   } else {
     departmentMenuItems = departmentNavigation['외과'];
   }
 
-  const menuItems = [
-    { name: '대시보드', href: dashboardHref, icon: BarChart3 },
-    ...departmentMenuItems
-  ];
+  // 검사실 사용자는 대시보드 메뉴 제외
+  const menuItems = user?.department === '검사실'
+    ? departmentMenuItems
+    : [
+      { name: '대시보드', href: dashboardHref, icon: BarChart3 },
+      ...departmentMenuItems
+    ];
 
   const getRoleBadgeColor = (role: string) => {
     const colors = {
@@ -126,36 +142,36 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
                 <div className="flex flex-col">
                   <span className="font-bold text-sm">CDSS</span>
                   <span className="text-xs text-muted-foreground">Platform</span>
-          </div>
+                </div>
               )}
-          </div>
+            </div>
           </NavLink>
-      </div>
+        </div>
 
         {/* Menu Items */}
         <nav className="p-4 space-y-2 overflow-y-auto h-[calc(100vh-180px)]">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = location.pathname === item.href;
-              return (
-                <NavLink
-                  key={item.href}
-                  to={item.href}
+          {menuItems.map((item) => {
+            const Icon = item.icon;
+            const isActive = location.pathname === item.href;
+            return (
+              <NavLink
+                key={item.href}
+                to={item.href}
                 className={cn(
                   "flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 group cursor-pointer block",
                   isActive
                     ? "bg-primary text-white"
                     : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 )}
-                >
+              >
                 <Icon className="w-5 h-5 flex-shrink-0" />
                 {isSidebarOpen && (
                   <span className="text-sm font-medium">{item.name}</span>
-                  )}
-                </NavLink>
-              );
-            })}
-      </nav>
+                )}
+              </NavLink>
+            );
+          })}
+        </nav>
 
         {/* Sidebar Footer */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
@@ -164,8 +180,8 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
               <div className="flex items-center gap-3 mb-2">
                 <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-accent text-white flex items-center justify-center flex-shrink-0">
                   <Activity className="w-4 h-4" />
-            </div>
-            <div className="flex-1 min-w-0">
+                </div>
+                <div className="flex-1 min-w-0">
                   <p className="text-xs font-medium text-foreground truncate">{userName}</p>
                   <p className={cn("text-[10px] font-semibold px-2 py-0.5 rounded-full w-fit", getRoleBadgeColor(user?.role || ''))}>
                     {getRoleLabel(user?.role || '')}
@@ -174,9 +190,9 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
               </div>
             </div>
           )}
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             className="w-full justify-start gap-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
             onClick={handleLogout}
           >

@@ -769,9 +769,9 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
                 # 진료 완료 환자 수
                 cursor.execute("SELECT COUNT(*) FROM medical_record WHERE is_treatment_completed = 1")
                 completed_count = cursor.fetchone()[0]
-            
+                
             # 오늘 예약 수 (Appointment 모델 사용, 부서별 필터링)
-            today = timezone.now().date()
+                today = timezone.now().date()
             today_appointments = Appointment.objects.filter(
                 start_time__date=today
             ).exclude(status='cancelled')

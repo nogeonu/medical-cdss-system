@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib
 import os
+import sys
 import pandas as pd
 import numpy as np
 import base64
@@ -12,6 +13,23 @@ import cv2
 
 app = Flask(__name__)
 CORS(app)
+
+# pCR 예측 모델 로드
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+try:
+    from lis.pcr_predictor import PCRPredictor
+    print(f"🔍 pCR 예측 모델 로드 시도 중...")
+    print(f"현재 작업 디렉토리: {os.getcwd()}")
+    print(f"ml_service 경로: {os.path.dirname(__file__)}")
+    pcr_predictor = PCRPredictor()
+    pcr_model_loaded = True
+    print(f"✅ pCR 예측 모델 로드 완료")
+except Exception as e:
+    pcr_predictor = None
+    pcr_model_loaded = False
+    print(f"❌ pCR 예측 모델 로드 실패: {e}")
+    import traceback
+    traceback.print_exc()
 
 # 폐암 ML 모델 로드
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -36,7 +54,8 @@ def health():
     """헬스 체크 엔드포인트"""
     return jsonify({
         'status': 'healthy',
-        'model_loaded': model_loaded
+        'model_loaded': model_loaded,
+        'pcr_model_loaded': pcr_model_loaded
     })
 
 @app.route('/predict', methods=['POST'])
@@ -102,6 +121,52 @@ def predict():
         print(f"❌ 예측 중 오류: {e}")
         return jsonify({
             'error': f'예측 중 오류가 발생했습니다: {str(e)}'
+        }), 500
+
+@app.route('/predict_pcr', methods=['POST'])
+def predict_pcr():
+    """pCR 예측 API"""
+    if not pcr_model_loaded:
+        return jsonify({
+            'error': 'pCR 예측 모델이 로드되지 않았습니다. 모델 파일을 확인해주세요.'
+        }), 503
+    
+    try:
+        data = request.get_json()
+        
+        # 유전자 발현값 추출
+        gene_values = data.get('gene_values', {})
+        patient_info = data.get('patient_info', {})
+        
+        # 필수 유전자 확인
+        required_genes = ['CXCL13', 'CD8A', 'CCR7', 'C1QA', 'LY9', 'CXCL10', 'CXCL9', 'STAT1',
+                         'CCND1', 'MKI67', 'TOP2A', 'BRCA1', 'RAD51', 'PRKDC', 'POLD3', 'POLB', 'LIG1',
+                         'ERBB2', 'ESR1', 'PGR', 'ARAF', 'PIK3CA', 'AKT1', 'MTOR', 'TP53', 'PTEN', 'MYC']
+        
+        missing_genes = [g for g in required_genes if g not in gene_values]
+        if missing_genes:
+            return jsonify({
+                'error': f'필수 유전자 발현값이 없습니다: {missing_genes}'
+            }), 400
+        
+        # pCR 예측 수행
+        result = pcr_predictor.generate_report_image(gene_values, patient_info)
+        
+        return jsonify({
+            'success': True,
+            'probability': result['probability'],
+            'prediction': result['prediction'],
+            'image': result['image'],
+            'top_genes': result['top_genes'],
+            'pathway_scores': result['pathway_scores']
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ pCR 예측 중 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': f'pCR 예측 중 오류가 발생했습니다: {str(e)}'
         }), 500
 
 if __name__ == '__main__':

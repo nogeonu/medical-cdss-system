@@ -38,17 +38,27 @@ def normalize_department(dept: str) -> str:
 
 def get_doctor_id(user_id: int) -> Optional[str]:
     """Fetch doctor_id for a given auth_user primary key."""
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT doctor_id FROM auth_user WHERE id = %s", [user_id])
-        row = cursor.fetchone()
-        return row[0] if row else None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT doctor_id FROM auth_user WHERE id = %s", [user_id])
+            row = cursor.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        # doctor_id 컬럼이 없거나 다른 오류 발생 시 None 반환
+        print(f"[get_doctor_id] 오류 발생 (user_id={user_id}): {e}")
+        return None
 
 
 def get_department(user_id: int) -> Optional[str]:
-    with connection.cursor() as cursor:
-        cursor.execute("SELECT department FROM auth_user WHERE id = %s", [user_id])
-        row = cursor.fetchone()
-        return row[0] if row else None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT department FROM auth_user WHERE id = %s", [user_id])
+            row = cursor.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        # department 컬럼이 없거나 다른 오류 발생 시 None 반환
+        print(f"[get_department] 오류 발생 (user_id={user_id}): {e}")
+        return None
 
 
 def set_department(user_id: int, department: str) -> None:

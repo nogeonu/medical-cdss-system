@@ -92,7 +92,15 @@ class SegmentationInferencePipeline:
         # For now, assuming preprocess_single_case handles the loading (via MONAI LoadImaged)
         preprocessed = preprocess_single_case(image_path)
         image_tensor = preprocessed["image"].to(self.device)
+        
+        # Extract meta_dict from preprocessed data
+        # MONAI LoadImaged stores metadata in image.meta, not image_meta_dict
+        from monai.data import MetaTensor
         meta_dict = preprocessed.get("image_meta_dict", None)
+        if meta_dict is None and isinstance(preprocessed["image"], MetaTensor):
+            # Extract from MetaTensor.meta if image_meta_dict not available
+            meta_dict = dict(preprocessed["image"].meta)
+        
         print(f"  Input shape: {image_tensor.shape}")
         
         # 2. Model Inference

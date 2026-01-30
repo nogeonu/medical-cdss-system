@@ -10,6 +10,7 @@ from .views import (
     AllergyCheckViewSet,
     NotificationViewSet,
     ImagingAnalysisResultViewSet,
+    PathologyAnalysisResultViewSet,
     DrugSearchView,
     DrugInteractionCheckView,
 )
@@ -21,6 +22,7 @@ router.register(r'drug-interaction-checks', DrugInteractionCheckViewSet, basenam
 router.register(r'allergy-checks', AllergyCheckViewSet, basename='allergy-check')
 router.register(r'notifications', NotificationViewSet, basename='notification')
 router.register(r'imaging-analysis', ImagingAnalysisResultViewSet, basename='imaging-analysis')
+router.register(r'pathology-analysis', PathologyAnalysisResultViewSet, basename='pathology-analysis')
 
 urlpatterns = [
     path('', include(router.urls)),

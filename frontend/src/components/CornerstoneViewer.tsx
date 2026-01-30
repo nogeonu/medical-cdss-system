@@ -31,6 +31,7 @@ import {
   MousePointer2,
   Sun,
   Layers,
+  Maximize2,
 } from 'lucide-react';
 import { initCornerstone, createImageId, WINDOW_LEVEL_PRESETS } from '@/lib/cornerstone';
 
@@ -72,8 +73,10 @@ export default function CornerstoneViewer({
   const [isImageLoading, setIsImageLoading] = useState(true);
   const [activeTool, setActiveTool] = useState<string>('WindowLevel');
   const [windowLevel, setWindowLevel] = useState(WINDOW_LEVEL_PRESETS.DEFAULT);
+  const [isOriginalSize, setIsOriginalSize] = useState(false);
   const renderingEngineRef = useRef<RenderingEngine | null>(null);
   const overlayCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const originalImageSizeRef = useRef<{ width: number; height: number } | null>(null);
   // 고유한 ID 생성 (컴포넌트마다 다른 ID 사용)
   // viewportId가 제공되면 사용, 아니면 랜덤 생성
   const uniqueId = viewportId || `${Date.now()}_${Math.random()}`;
@@ -257,6 +260,21 @@ export default function CornerstoneViewer({
             } catch (e) {
               console.warn('Could not read DICOM Window/Level, using defaults', e);
             }
+          }
+
+          // 원본 이미지 크기 저장
+          try {
+            // @ts-ignore
+            const image = viewport.getImageData();
+            if (image) {
+              originalImageSizeRef.current = {
+                width: image.width || image.dimensions?.[0] || 512,
+                height: image.height || image.dimensions?.[1] || 512,
+              };
+              console.log('원본 이미지 크기:', originalImageSizeRef.current);
+            }
+          } catch (e) {
+            console.warn('Could not get image dimensions', e);
           }
         }
 
@@ -560,9 +578,16 @@ export default function CornerstoneViewer({
       return;
     }
 
-    // Canvas 크기를 뷰포트에 맞게 설정
+    // Canvas 크기 설정 (원본 크기 모드면 원본 픽셀 크기 사용)
     const container = canvas.parentElement;
-    if (container) {
+    if (isOriginalSize && originalImageSizeRef.current) {
+      // 원본 크기 모드: 원본 픽셀 크기 사용
+      const { width, height } = originalImageSizeRef.current;
+      canvas.width = width;
+      canvas.height = height;
+      console.log(`[CornerstoneViewer] Canvas 원본 크기 설정: ${width}×${height}`);
+    } else if (container) {
+      // 뷰포트 맞춤 모드: 컨테이너 크기 사용
       const rect = container.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         canvas.width = rect.width;
@@ -589,12 +614,26 @@ export default function CornerstoneViewer({
     const maskImg = new Image();
     maskImg.onload = () => {
       console.log(`[CornerstoneViewer] 마스크 이미지 로드 완료: ${maskImg.width}×${maskImg.height}`);
-      // 마스크 이미지 크기 계산 (object-contain 방식)
-      const scale = Math.min(canvas.width / maskImg.width, canvas.height / maskImg.height);
-      const x = (canvas.width - maskImg.width * scale) / 2;
-      const y = (canvas.height - maskImg.height * scale) / 2;
-      const w = maskImg.width * scale;
-      const h = maskImg.height * scale;
+      // 마스크 이미지 크기 계산
+      let scale: number;
+      let x: number, y: number, w: number, h: number;
+      
+      if (isOriginalSize && originalImageSizeRef.current) {
+        // 원본 크기 모드: 1:1 픽셀 매핑
+        scale = 1;
+        x = 0;
+        y = 0;
+        w = maskImg.width;
+        h = maskImg.height;
+        console.log(`[CornerstoneViewer] 원본 크기 모드: 마스크 1:1 매핑`);
+      } else {
+        // 뷰포트 맞춤 모드: object-contain 방식
+        scale = Math.min(canvas.width / maskImg.width, canvas.height / maskImg.height);
+        x = (canvas.width - maskImg.width * scale) / 2;
+        y = (canvas.height - maskImg.height * scale) / 2;
+        w = maskImg.width * scale;
+        h = maskImg.height * scale;
+      }
 
       // 임시 Canvas에 마스크 이미지 그리기
       const tempCanvas = document.createElement('canvas');
@@ -624,26 +663,32 @@ export default function CornerstoneViewer({
 
 
       // 변환된 이미지 데이터를 메인 Canvas에 그리기
-      const scaledImageData = ctx.createImageData(w, h);
-      // 이미지 데이터를 스케일링하여 복사 (간단한 nearest neighbor)
-      const scaleX = maskImg.width / w;
-      const scaleY = maskImg.height / h;
-      for (let dy = 0; dy < h; dy++) {
-        for (let dx = 0; dx < w; dx++) {
-          const sx = Math.floor(dx * scaleX);
-          const sy = Math.floor(dy * scaleY);
-          const srcIdx = (sy * maskImg.width + sx) * 4;
-          const dstIdx = (dy * w + dx) * 4;
+      if (isOriginalSize && scale === 1) {
+        // 원본 크기 모드: 1:1 픽셀 매핑 (스케일링 불필요)
+        ctx.putImageData(imageData, 0, 0);
+      } else {
+        // 뷰포트 맞춤 모드: 스케일링 필요
+        const scaledImageData = ctx.createImageData(w, h);
+        // 이미지 데이터를 스케일링하여 복사 (간단한 nearest neighbor)
+        const scaleX = maskImg.width / w;
+        const scaleY = maskImg.height / h;
+        for (let dy = 0; dy < h; dy++) {
+          for (let dx = 0; dx < w; dx++) {
+            const sx = Math.floor(dx * scaleX);
+            const sy = Math.floor(dy * scaleY);
+            const srcIdx = (sy * maskImg.width + sx) * 4;
+            const dstIdx = (dy * w + dx) * 4;
 
-          if (srcIdx < data.length && data[srcIdx + 3] > 0) {
-            scaledImageData.data[dstIdx] = data[srcIdx];
-            scaledImageData.data[dstIdx + 1] = data[srcIdx + 1];
-            scaledImageData.data[dstIdx + 2] = data[srcIdx + 2];
-            scaledImageData.data[dstIdx + 3] = data[srcIdx + 3];
+            if (srcIdx < data.length && data[srcIdx + 3] > 0) {
+              scaledImageData.data[dstIdx] = data[srcIdx];
+              scaledImageData.data[dstIdx + 1] = data[srcIdx + 1];
+              scaledImageData.data[dstIdx + 2] = data[srcIdx + 2];
+              scaledImageData.data[dstIdx + 3] = data[srcIdx + 3];
+            }
           }
         }
+        ctx.putImageData(scaledImageData, x, y);
       }
-      ctx.putImageData(scaledImageData, x, y);
       console.log('[CornerstoneViewer] 세그멘테이션 오버레이 렌더링 완료');
     };
     maskImg.onerror = (e) => {
@@ -656,7 +701,7 @@ export default function CornerstoneViewer({
       maskImg.onerror = null;
       maskImg.onload = null;
     };
-  }, [showSegmentation, segmentationFrames, currentIndex]);
+  }, [showSegmentation, segmentationFrames, currentIndex, isOriginalSize]);
 
   // 도구 설정
   const setupTools = (viewportId: string) => {
@@ -731,6 +776,53 @@ export default function CornerstoneViewer({
     });
 
     setActiveTool(toolName);
+  };
+
+  // 원본 크기 토글
+  const handleOriginalSize = () => {
+    if (!renderingEngineRef.current) return;
+
+    try {
+      const viewport = renderingEngineRef.current.getViewport(viewportIdRef.current);
+      if (!viewport) return;
+
+      if (!isOriginalSize) {
+        // 원본 크기로 설정 (1:1 픽셀)
+        // @ts-ignore
+        const image = viewport.getImageData();
+        if (image && originalImageSizeRef.current) {
+          const { width, height } = originalImageSizeRef.current;
+          const element = viewportRef.current;
+          if (element) {
+            const elementRect = element.getBoundingClientRect();
+            
+            // @ts-ignore
+            const camera = viewport.getCamera();
+            if (camera) {
+              // 1:1 픽셀 비율로 zoom 설정
+              // parallelScale을 원본 이미지 높이의 절반으로 설정하면 1:1 픽셀 비율이 됨
+              // @ts-ignore
+              viewport.setCamera({
+                ...camera,
+                parallelScale: height / 2, // 원본 높이의 절반 (1:1 픽셀)
+              });
+              viewport.render();
+              setIsOriginalSize(true);
+              console.log('원본 크기 모드 활성화:', { width, height, elementSize: elementRect });
+            }
+          }
+        }
+      } else {
+        // 뷰포트에 맞춤
+        // @ts-ignore
+        viewport.resetCamera();
+        viewport.render();
+        setIsOriginalSize(false);
+        console.log('뷰포트 맞춤 모드 활성화');
+      }
+    } catch (error) {
+      console.error('원본 크기 설정 실패:', error);
+    }
   };
 
   if (!isInitialized) {
@@ -823,6 +915,19 @@ export default function CornerstoneViewer({
           >
             <MousePointer2 className="w-4 h-4 mr-1" />
             픽셀 값
+          </Button>
+          <div className="w-px h-6 bg-gray-600" />
+          <Button
+            size="sm"
+            variant={isOriginalSize ? 'default' : 'outline'}
+            onClick={handleOriginalSize}
+            className={`h-9 transition-all ${isOriginalSize
+              ? 'bg-purple-600 hover:bg-purple-700 text-white'
+              : 'bg-gray-700 hover:bg-gray-600 text-gray-200 border-gray-600'
+              }`}
+          >
+            <Maximize2 className="w-4 h-4 mr-1" />
+            원본 크기 {isOriginalSize ? 'ON' : 'OFF'}
           </Button>
         </div>
       )}

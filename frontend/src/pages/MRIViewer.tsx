@@ -25,9 +25,9 @@ import {
   ChevronRight,
   ChevronLeft,
   Info,
-  Settings2,
   Cpu,
   Plus,
+  Settings2,
   Maximize2
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -125,17 +125,23 @@ export default function MRIViewer() {
   const params = useParams<{ patientId?: string }>();
   const [searchParams] = useSearchParams();
   const isRadiologyTech = user?.department === '방사선과'; // 방사선과 = 촬영 담당
+  const isImagingDept = user?.department === '영상의학과'; // 영상의학과
+  const shouldExcludePathology = isRadiologyTech || isImagingDept; // 방사선과와 영상의학과만 병리 영상 제외
 
   // 페이지 제목 결정: 방사선과는 "영상 업로드", 영상의학과/외과는 "영상 판독"
   const pageTitle = isRadiologyTech ? '영상 업로드' : '영상 판독';
 
   // URL 파라미터에서 imageType 읽기
   const urlImageType = searchParams.get('imageType');
-  const initialImageType = (urlImageType === 'MRI 영상' || urlImageType === '병리 영상' || urlImageType === '유방촬영술 영상')
-    ? urlImageType as '유방촬영술 영상' | '병리 영상' | 'MRI 영상'
+  const availableImageTypes = shouldExcludePathology 
+    ? ['유방촬영술 영상', 'MRI 영상'] as const
+    : ['유방촬영술 영상', '병리 영상', 'MRI 영상'] as const;
+  
+  const initialImageType = (urlImageType && availableImageTypes.includes(urlImageType as any))
+    ? urlImageType as typeof availableImageTypes[number]
     : '유방촬영술 영상';
 
-  const [imageType, setImageType] = useState<'유방촬영술 영상' | '병리 영상' | 'MRI 영상'>(initialImageType);
+  const [imageType, setImageType] = useState<typeof availableImageTypes[number]>(initialImageType);
   const [systemPatients, setSystemPatients] = useState<SystemPatient[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<string | null>(null);
   const [patientDetail, setPatientDetail] = useState<PatientDetailInfo | null>(null);
@@ -154,6 +160,7 @@ export default function MRIViewer() {
   const [uploading, setUploading] = useState(false);
   const [selectedImage, setSelectedImage] = useState<number>(0);
   const [isDragging, setIsDragging] = useState(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -297,7 +304,7 @@ export default function MRIViewer() {
     try {
       console.log(`[fetchOrthancImages] 환자 ID로 이미지 요청: ${patientId}`);
       // 병렬 요청으로 성능 개선
-      const response = await fetch(`/api/mri/orthanc/patients/${patientId}/`, {
+      const response = await fetch(`${API_BASE_URL}/orthanc/patients/${patientId}/`, {
         cache: 'no-cache', // 캐시 비활성화 (최신 데이터 확인)
       });
 
@@ -451,34 +458,42 @@ export default function MRIViewer() {
     setIsDragging(false);
   };
 
-  // 폴더 내의 모든 DICOM/NIfTI 파일을 재귀적으로 수집하는 헬퍼 함수
-  const collectFilesFromEntry = async (entry: FileSystemEntry, files: File[]): Promise<void> => {
+  // 폴더 내의 모든 DICOM 파일을 재귀적으로 수집하는 헬퍼 함수
+  const collectFilesFromEntry = async (entry: FileSystemEntry, files: File[], basePath: string = ''): Promise<void> => {
     return new Promise((resolve) => {
       if (entry.isFile) {
         (entry as FileSystemFileEntry).file((file: File) => {
-          // DICOM 또는 NIfTI 파일만 허용
+          // DICOM 파일만 허용 (NIfTI 제거)
           if (file.name.endsWith('.dicom') ||
-            file.name.endsWith('.dcm') ||
-            file.name.endsWith('.nii') ||
-            file.name.endsWith('.nii.gz')) {
+            file.name.endsWith('.dcm')) {
+            // webkitRelativePath는 읽기 전용이므로 커스텀 속성 사용
+            const relativePath = basePath ? `${basePath}/${file.name}` : file.name;
+            // Object.defineProperty로 커스텀 속성 추가
+            Object.defineProperty(file, 'customRelativePath', {
+              value: relativePath,
+              writable: false,
+              configurable: true
+            });
             files.push(file);
           }
           resolve();
         }, () => resolve());
       } else if (entry.isDirectory) {
         const dirReader = (entry as FileSystemDirectoryEntry).createReader();
-        
+        const dirName = entry.name;
+        const newBasePath = basePath ? `${basePath}/${dirName}` : dirName;
+
         // readEntries는 한 번에 모든 엔트리를 반환하지 않을 수 있으므로
         // 빈 배열이 반환될 때까지 반복 호출해야 함
         const readAllEntries = (): Promise<void> => {
           return new Promise((readResolve) => {
             const allEntries: FileSystemEntry[] = [];
-            
+
             const readBatch = () => {
               dirReader.readEntries((entries: FileSystemEntry[]) => {
                 if (entries.length === 0) {
                   // 더 이상 엔트리가 없으면 모든 엔트리를 처리
-                  const promises = allEntries.map(e => collectFilesFromEntry(e, files));
+                  const promises = allEntries.map(e => collectFilesFromEntry(e, files, newBasePath));
                   Promise.all(promises).then(() => readResolve());
                 } else {
                   // 엔트리를 수집하고 다음 배치 읽기
@@ -488,18 +503,18 @@ export default function MRIViewer() {
               }, () => {
                 // 에러 발생 시에도 수집된 엔트리 처리
                 if (allEntries.length > 0) {
-                  const promises = allEntries.map(e => collectFilesFromEntry(e, files));
+                  const promises = allEntries.map(e => collectFilesFromEntry(e, files, newBasePath));
                   Promise.all(promises).then(() => readResolve());
                 } else {
                   readResolve();
                 }
               });
             };
-            
+
             readBatch();
           });
         };
-        
+
         readAllEntries().then(() => resolve());
       } else {
         resolve();
@@ -523,8 +538,11 @@ export default function MRIViewer() {
 
     const items = Array.from(e.dataTransfer.items);
     const files: File[] = [];
+    const folders: FileSystemDirectoryEntry[] = [];
 
-    // 드롭된 파일/폴더 수집
+    console.log(`📦 드롭된 항목 수: ${items.length}`);
+
+    // 드롭된 파일/폴더 수집 (폴더는 별도로 수집)
     for (const item of items) {
       if (item.kind === 'file') {
         // FileSystemEntry API 사용 (폴더 지원)
@@ -534,26 +552,24 @@ export default function MRIViewer() {
             // 개별 파일
             const file = item.getAsFile();
             if (file) {
-              // DICOM 또는 NIfTI 파일만 허용
+              // DICOM 파일만 허용 (NIfTI 제거)
               if (file.name.endsWith('.dicom') ||
-                file.name.endsWith('.dcm') ||
-                file.name.endsWith('.nii') ||
-                file.name.endsWith('.nii.gz')) {
+                file.name.endsWith('.dcm')) {
                 files.push(file);
               }
             }
           } else if (entry.isDirectory) {
-            // 폴더인 경우: 내부의 모든 DICOM/NIfTI 파일 수집
-            await collectFilesFromEntry(entry, files);
+            // 폴더인 경우: 별도 배열에 추가 (나중에 일괄 처리)
+            console.log(`📁 폴더 감지: ${entry.name}`);
+            folders.push(entry as unknown as FileSystemDirectoryEntry);
           }
         } else {
           // FileSystemEntry를 지원하지 않는 경우: 기존 방식 사용
           const file = item.getAsFile();
           if (file) {
+            // DICOM 파일만 허용 (NIfTI 제거)
             if (file.name.endsWith('.dicom') ||
-              file.name.endsWith('.dcm') ||
-              file.name.endsWith('.nii') ||
-              file.name.endsWith('.nii.gz')) {
+              file.name.endsWith('.dcm')) {
               files.push(file);
             }
           }
@@ -561,10 +577,21 @@ export default function MRIViewer() {
       }
     }
 
+    // 감지된 폴더가 있으면 모두 처리
+    if (folders.length > 0) {
+      console.log(`📁 총 ${folders.length}개 폴더 감지됨`);
+      for (const folder of folders) {
+        await collectFilesFromEntry(folder, files, folder.name);
+        console.log(`✅ 폴더 처리 완료: ${folder.name}, 현재 총 ${files.length}개 파일`);
+      }
+    }
+
+    console.log(`📊 최종 수집된 파일 수: ${files.length}개 (${folders.length}개 폴더에서)`);
+
     if (files.length === 0) {
       toast({
         title: "오류",
-        description: "DICOM 또는 NIfTI 파일을 드롭해주세요. (폴더 업로드 지원)",
+        description: "DICOM 파일을 드롭해주세요. (폴더 업로드 지원)",
         variant: "destructive"
       });
       return;
@@ -578,6 +605,31 @@ export default function MRIViewer() {
       });
     }
 
+    // MRI 영상인 경우 seq 폴더 확인 및 안내
+    if (imageType === 'MRI 영상') {
+      const filePaths = files.map(f => (f as any).customRelativePath || (f as any).webkitRelativePath || f.name).join('|');
+      const hasSeq0 = /seq[_\s]*0/i.test(filePaths);
+      const hasSeq1 = /seq[_\s]*1/i.test(filePaths);
+      const hasSeq2 = /seq[_\s]*2/i.test(filePaths);
+      const hasSeq3 = /seq[_\s]*3/i.test(filePaths);
+      
+      const foundSeqs = [hasSeq0, hasSeq1, hasSeq2, hasSeq3].filter(Boolean).length;
+      
+      if (foundSeqs > 0) {
+        toast({
+          title: `폴더 ${foundSeqs}/4개 감지`,
+          description: `${foundSeqs}개 시리즈 폴더(seq_0~seq_3)가 감지되었습니다. ${files.length}개 DICOM 파일을 업로드합니다.`,
+        });
+      } else {
+        toast({
+          title: "경고",
+          description: `seq_0~seq_3 폴더가 감지되지 않았습니다. ${files.length}개 파일을 일반 업로드합니다.`,
+          variant: "default"
+        });
+      }
+    }
+
+    // 바로 업로드
     await uploadFiles(files);
   };
 
@@ -592,8 +644,56 @@ export default function MRIViewer() {
       return;
     }
 
+    // FileList를 Array로 변환
     const fileArray = Array.from(files);
-    await uploadFiles(fileArray);
+    
+    console.log(`📂 파일 선택: ${fileArray.length}개 항목`);
+    console.log(`📁 파일 경로 샘플 (처음 5개):`, 
+      fileArray.slice(0, 5).map(f => (f as any).webkitRelativePath || f.name)
+    );
+
+    // DICOM 파일만 필터링 (NIfTI 제거)
+    const dicomFiles = fileArray.filter(file =>
+      file.name.endsWith('.dicom') || file.name.endsWith('.dcm')
+    );
+
+    if (dicomFiles.length === 0) {
+      toast({
+        title: "오류",
+        description: "DICOM 파일만 업로드 가능합니다.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    console.log(`✅ DICOM 파일 필터링 완료: ${dicomFiles.length}개 파일`);
+
+    // MRI 영상인 경우 seq 폴더 확인 및 안내
+    if (imageType === 'MRI 영상') {
+      const filePaths = dicomFiles.map(f => (f as any).customRelativePath || (f as any).webkitRelativePath || f.name).join('|');
+      const hasSeq0 = /seq[_\s]*0/i.test(filePaths);
+      const hasSeq1 = /seq[_\s]*1/i.test(filePaths);
+      const hasSeq2 = /seq[_\s]*2/i.test(filePaths);
+      const hasSeq3 = /seq[_\s]*3/i.test(filePaths);
+      
+      const foundSeqs = [hasSeq0, hasSeq1, hasSeq2, hasSeq3].filter(Boolean).length;
+      
+      if (foundSeqs > 0) {
+        toast({
+          title: `폴더 ${foundSeqs}/4개 감지`,
+          description: `${foundSeqs}개 시리즈 폴더(seq_0~seq_3)가 감지되었습니다. ${dicomFiles.length}개 DICOM 파일을 업로드합니다.`,
+        });
+      } else {
+        toast({
+          title: "경고",
+          description: `seq_0~seq_3 폴더가 감지되지 않았습니다. ${dicomFiles.length}개 파일을 일반 업로드합니다.`,
+          variant: "default"
+        });
+      }
+    }
+    
+    // 바로 업로드
+    await uploadFiles(dicomFiles);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -651,7 +751,7 @@ export default function MRIViewer() {
       });
 
       const response = await fetch(
-        `/api/mri/segmentation/series/${firstImage.series_id}/segment/`,
+        `${API_BASE_URL}/segmentation/series/${firstImage.series_id}/segment/`,
         {
           method: 'POST',
           headers: {
@@ -714,6 +814,118 @@ export default function MRIViewer() {
     const patientName = selectedPatientInfo?.name || selectedPatient;
 
     try {
+      // MRI 영상인 경우 시리즈 폴더 업로드 엔드포인트 사용
+      if (imageType === 'MRI 영상') {
+        const formData = new FormData();
+        
+        // 파일과 경로 정보를 함께 전달
+        files.forEach((file) => {
+          // 파일 추가
+          formData.append('files', file);
+          
+          // 경로 정보를 별도로 전달 (서버에서 seq_0, seq_1 판별에 사용)
+          const relativePath = (file as any).webkitRelativePath || file.name;
+          formData.append('file_paths', relativePath);
+        });
+        
+        console.log(`📤 업로드 준비: ${files.length}개 파일`);
+        console.log(`📁 파일 경로 샘플 (처음 5개):`, 
+          files.slice(0, 5).map(f => (f as any).webkitRelativePath || f.name)
+        );
+        
+        formData.append('patient_id', selectedPatient);
+        formData.append('patient_name', patientName);
+        formData.append('image_type', imageType);
+
+        const response = await fetch(`${API_BASE_URL}/orthanc/upload-series-folder/`, {
+          method: 'POST',
+          body: formData
+        });
+
+        // 404 에러인 경우 서버 상태 안내
+        if (response.status === 404) {
+          toast({
+            title: "업로드 실패 (404 Not Found)",
+            description: "외부 서버에 해당 기능이 아직 배포되지 않았을 수 있습니다. 상단의 주소를 localhost:5173으로 실행 중인 로컬 환경에서 테스트해보세요.",
+            variant: "destructive",
+            duration: 10000,
+          });
+          setUploading(false);
+          return;
+        }
+
+        // Response body는 한 번만 읽을 수 있으므로 text를 먼저 읽고 JSON 파싱 시도
+        const responseText = await response.text();
+        let data;
+        try {
+          data = JSON.parse(responseText);
+        } catch (jsonError) {
+          // HTML 응답이 오는 경우 (서버 에러 페이지)
+          if (responseText.trim().startsWith('<!DOCTYPE') || responseText.trim().startsWith('<html')) {
+            errorMessages.push(`서버 에러 발생 (${response.status})`);
+            console.error(`❌ 서버가 HTML 에러 페이지를 반환했습니다:`, response.status);
+            toast({
+              title: "업로드 실패",
+              description: `서버에서 에러가 발생했습니다 (${response.status}). 서버 로그를 확인해주세요.`,
+              variant: "destructive"
+            });
+          } else {
+            errorMessages.push(`서버 응답 파싱 실패 (${response.status})`);
+            console.error(`❌ 응답 파싱 실패:`, responseText.substring(0, 200));
+            toast({
+              title: "업로드 실패",
+              description: `서버 응답을 파싱할 수 없습니다: ${responseText.substring(0, 100)}`,
+              variant: "destructive"
+            });
+          }
+          return;
+        }
+
+        if (response.ok && data.success) {
+          const seriesCount = data.uploaded_series ? Object.keys(data.uploaded_series).length : 0;
+          const uploadedCount = data.total_instances || 0;
+          const totalFiles = data.total_files || files.length;
+          
+          console.log(`✅ 업로드 완료:`, {
+            시리즈: seriesCount,
+            업로드된파일: uploadedCount,
+            전체파일: totalFiles,
+            실패: data.failed_count || 0
+          });
+          
+          if (uploadedCount < totalFiles) {
+            toast({
+              title: "업로드 완료 (일부 실패)",
+              description: `${seriesCount}개 시리즈, ${uploadedCount}/${totalFiles}개 파일 업로드 완료 (${data.failed_count || 0}개 실패)`,
+              variant: "default"
+            });
+          } else {
+            toast({
+              title: "업로드 완료",
+              description: `${seriesCount}개 시리즈, ${uploadedCount}개 파일 업로드 완료`
+            });
+          }
+          if (selectedPatient) fetchOrthancImages(selectedPatient);
+        } else {
+          const errorMsg = data.error || data.message || '업로드 실패';
+          const errorType = data.error_type || '';
+          errorMessages.push(errorMsg);
+          console.error('업로드 실패 상세:', {
+            error: errorMsg,
+            error_type: errorType,
+            response_status: response.status,
+            data: data
+          });
+          toast({
+            title: "업로드 실패",
+            description: errorType ? `${errorType}: ${errorMsg}` : errorMsg,
+            variant: "destructive"
+          });
+        }
+        return;
+      }
+
+      // 기존 로직 (병리 영상, 유방촬영술 영상)
       for (let i = 0; i < files.length; i++) {
         try {
           const formData = new FormData();
@@ -724,21 +936,22 @@ export default function MRIViewer() {
 
           // 병리 이미지는 별도 엔드포인트 사용
           const uploadUrl = imageType === '병리 영상'
-            ? '/api/mri/pathology/upload/'
-            : '/api/mri/orthanc/upload/';
+            ? `${API_BASE_URL}/pathology/upload/`
+            : `${API_BASE_URL}/orthanc/upload/`;
 
           const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData
           });
 
+          // Response body는 한 번만 읽을 수 있으므로 text를 먼저 읽고 JSON 파싱 시도
+          const responseText = await response.text();
           let data;
           try {
-            data = await response.json();
+            data = JSON.parse(responseText);
           } catch (jsonError) {
-            const text = await response.text();
             errorMessages.push(`${files[i].name}: 서버 응답 파싱 실패 (${response.status})`);
-            console.error(`❌ 파일 ${i + 1} 응답 파싱 실패:`, text);
+            console.error(`❌ 파일 ${i + 1} 응답 파싱 실패:`, responseText);
             continue;
           }
 
@@ -847,13 +1060,15 @@ export default function MRIViewer() {
             <CardContent className="p-6 space-y-6">
               <div className="space-y-2">
                 <Label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">영상 유형 선택</Label>
-                <Select value={imageType} onValueChange={(value) => setImageType(value as '유방촬영술 영상' | '병리 영상' | 'MRI 영상')}>
+                <Select value={imageType} onValueChange={(value) => setImageType(value as typeof availableImageTypes[number])}>
                   <SelectTrigger className="h-11 rounded-xl bg-gray-50 border-none font-bold text-sm focus:ring-2 focus:ring-blue-600/20">
                     <SelectValue placeholder="영상 유형을 선택하세요" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl border-none shadow-xl">
                     <SelectItem value="유방촬영술 영상" className="rounded-lg">유방촬영술 영상</SelectItem>
-                    <SelectItem value="병리 영상" className="rounded-lg">병리 영상</SelectItem>
+                    {!shouldExcludePathology && (
+                      <SelectItem value="병리 영상" className="rounded-lg">병리 영상</SelectItem>
+                    )}
                     <SelectItem value="MRI 영상" className="rounded-lg">MRI 영상</SelectItem>
                   </SelectContent>
                 </Select>
@@ -979,9 +1194,25 @@ export default function MRIViewer() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <p className="text-[10px] font-medium text-gray-400 leading-relaxed">
-                  DICOM 폴더 또는 NIfTI 파일을 서버로 전송합니다. 전송 후 실시간 3D 변환이 시작됩니다.
-                </p>
+                {imageType === 'MRI 영상' && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 space-y-2">
+                    <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
+                      💡 여러 폴더 업로드 방법
+                    </p>
+                    <div className="text-[10px] text-gray-300 space-y-1">
+                      <p className="font-bold">드래그 앤 드롭으로 업로드</p>
+                      <p className="pl-2">• 상위 폴더(ISPY2_213913_DICOM_4CH)를 드래그해서 위 영역에 놓으세요</p>
+                      <p className="pl-2">• 내부의 seq_0, seq_1, seq_2, seq_3 폴더의 모든 파일이 자동으로 포함됩니다</p>
+                      <p className="pl-2 font-bold text-blue-400">• 각 폴더가 하나의 시리즈로 Orthanc에 저장됩니다</p>
+                      <p className="pl-2">• 또는 seq_0, seq_1, seq_2, seq_3 폴더를 각각 드래그할 수도 있습니다</p>
+                    </div>
+                  </div>
+                )}
+                {imageType !== 'MRI 영상' && (
+                  <p className="text-[10px] font-medium text-gray-400 leading-relaxed">
+                    DICOM 파일을 서버로 전송합니다.
+                  </p>
+                )}
 
                 {/* 드래그 앤 드롭 영역 */}
                 <div
@@ -989,8 +1220,8 @@ export default function MRIViewer() {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                   className={`relative border-2 border-dashed rounded-xl p-6 transition-all duration-200 ${isDragging
-                      ? 'border-blue-400 bg-blue-500/10 scale-[1.02]'
-                      : 'border-gray-700 hover:border-gray-600'
+                    ? 'border-blue-400 bg-blue-500/10 scale-[1.02]'
+                    : 'border-gray-700 hover:border-gray-600'
                     }`}
                 >
                   <div className="text-center space-y-3">
@@ -1000,10 +1231,12 @@ export default function MRIViewer() {
                     </div>
                     <div>
                       <p className="text-sm font-bold text-white">
-                        {isDragging ? '여기에 놓으세요!' : '폴더를 드래그하세요'}
+                        {isDragging ? '여기에 놓으세요!' : imageType === 'MRI 영상' ? '폴더 4개를 드래그하세요 (seq_0~seq_3)' : '파일 또는 폴더를 드래그하세요'}
                       </p>
                       <p className="text-[10px] text-gray-500 mt-1">
-                        또는 아래 버튼으로 파일 선택 (Cmd+A로 전체 선택)
+                        {imageType === 'MRI 영상'
+                          ? '✨ 여러 폴더(최대 4개)를 동시에 드래그하여 업로드할 수 있습니다. 각 폴더 내부의 모든 DICOM 파일이 자동으로 포함됩니다.'
+                          : '또는 아래 버튼으로 파일/폴더 선택'}
                       </p>
                     </div>
                   </div>
@@ -1014,7 +1247,8 @@ export default function MRIViewer() {
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept={imageType === '병리 영상' ? '.svs' : '.dicom,.dcm,.nii,.nii.gz'}
+                    {...(imageType === 'MRI 영상' || imageType === '유방촬영술 영상' ? { webkitdirectory: '', directory: '' } as any : {})}
+                    accept={imageType === '병리 영상' ? '.svs' : imageType === 'MRI 영상' ? '' : '.dicom,.dcm'}
                     onChange={handleFileUpload}
                     disabled={uploading}
                     className="hidden"
@@ -1026,8 +1260,11 @@ export default function MRIViewer() {
                     disabled={uploading}
                   >
                     {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                    파일 선택 및 업로드
+                    {imageType === 'MRI 영상' ? '폴더 선택 (한 번에 1개)' : imageType === '유방촬영술 영상' ? '폴더 선택 및 업로드' : '파일 선택 및 업로드'}
                   </Button>
+                  <p className="text-[10px] text-gray-400 mt-2 text-center">
+                    {imageType === 'MRI 영상' && '💡 여러 폴더를 한 번에 업로드하려면 파일 탐색기에서 seq_0~seq_3 폴더를 모두 선택(Cmd+클릭) 후 드래그하세요'}
+                  </p>
                 </div>
               </CardContent>
             </Card>

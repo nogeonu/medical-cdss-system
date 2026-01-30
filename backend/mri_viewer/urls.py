@@ -19,6 +19,7 @@ urlpatterns = [
     path('orthanc/instances/<str:instance_id>/file', orthanc_views.orthanc_instance_file, name='orthanc-instance-file'),
     path('orthanc/upload/', csrf_exempt(orthanc_views.orthanc_upload_dicom), name='orthanc-upload'),
     path('orthanc/upload-folder/', csrf_exempt(orthanc_views.orthanc_upload_dicom_folder), name='orthanc-upload-folder'),
+    path('orthanc/upload-series-folder/', csrf_exempt(orthanc_views.orthanc_upload_dicom_series_folder), name='orthanc-upload-series-folder'),
     path('orthanc/patients/<str:patient_id>/delete/', orthanc_views.orthanc_delete_patient, name='orthanc-delete-patient'),
     
     # AI Segmentation API (MRI - 향후 모델 통합)
@@ -29,15 +30,32 @@ urlpatterns = [
     path('segmentation/instances/<str:instance_id>/segment/', segmentation_views.mri_segmentation, name='mri-segmentation'),
     path('segmentation/series/<str:series_id>/segment/', segmentation_views.segment_series, name='segment-series'),
     path('segmentation/instances/<str:seg_instance_id>/frames/', segmentation_views.get_segmentation_frames, name='get-segmentation-frames'),
+    path('segmentation/instances/<str:seg_instance_id>/volume-instances/', segmentation_views.get_segmentation_volume_instances, name='get-segmentation-volume-instances'),
     path('segmentation/health/', segmentation_views.segmentation_health, name='segmentation-health'),
     
-    # 맘모그래피 AI 분석 API
-    path('mammography/analyze/', mammography_views.mammography_ai_analysis, name='analyze-mammography'),
-    path('mammography/health/', mammography_views.mammography_health, name='mammography-health'),
+    # 연구실 컴퓨터 추론 요청 API
+    path('segmentation/series/<str:series_id>/request-local/', segmentation_views.request_local_inference, name='request-local-inference'),
+    path('segmentation/status/<str:request_id>/', segmentation_views.check_inference_status, name='check-inference-status'),
+    path('segmentation/requests/', segmentation_views.list_inference_requests, name='list-inference-requests'),
     
+    # HTTP API 방식 (공유 디렉토리 불필요)
+    path('segmentation/pending-requests/', csrf_exempt(segmentation_views.get_pending_requests), name='get-pending-requests'),
+    path('segmentation/complete-request/<str:request_id>/', segmentation_views.complete_inference_request, name='complete-inference-request'),
+    path('segmentation/update-status/<str:request_id>/', csrf_exempt(segmentation_views.update_request_status), name='update-request-status'),
+    
+    # 조원님 워커 호환용 API (HTTP_API_구현_계획.md 참고)
+    # /api/inference/ 경로에서 직접 사용하므로 'inference/' 제거
+    path('pending', csrf_exempt(segmentation_views.get_pending_inference), name='get-pending-inference'),
+    path('<str:request_id>/complete', csrf_exempt(segmentation_views.complete_inference), name='complete-inference'),
+    
+    # 맘모그래피 AI 분석 API
+    path('mammography/analyze/', csrf_exempt(mammography_views.mammography_ai_analysis), name='analyze-mammography'),
+    path('mammography/health/', mammography_views.mammography_health, name='mammography-health'),
+
     # 병리 이미지 AI 분석 API
-    path('pathology/analyze/', pathology_views.pathology_ai_analysis, name='analyze-pathology'),
+    path('pathology/analyze/', csrf_exempt(pathology_views.pathology_ai_analysis), name='analyze-pathology'),
     path('pathology/health/', pathology_views.pathology_ai_health, name='pathology-health'),
+    path('pathology/save-result/', pathology_views.save_pathology_result, name='save-pathology-result'),
     
     # 병리 이미지 업로드 API
     path('pathology/upload/', csrf_exempt(pathology_upload_views.upload_pathology_image), name='upload-pathology'),

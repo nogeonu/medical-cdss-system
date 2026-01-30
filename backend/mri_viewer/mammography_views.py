@@ -6,9 +6,11 @@ Mosec 서비스 (포트 5007)를 호출하여 4-class 분류 수행
 import logging
 import base64
 import requests
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
+from rest_framework.permissions import AllowAny
 from .orthanc_client import OrthancClient
 from .utils import pil_image_to_dicom
 from PIL import Image
@@ -16,11 +18,18 @@ from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
+# CSRF 체크를 건너뛰는 커스텀 인증 클래스
+class CSRFExemptSessionAuthentication(SessionAuthentication):
+    def enforce_csrf(self, request):
+        return  # CSRF 체크를 건너뜀
+
 # Mosec 맘모그래피 서비스 URL
 MAMMOGRAPHY_API_URL = "http://localhost:5007"
 
 
 @api_view(['POST'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
 def mammography_ai_analysis(request):
     """
     맘모그래피 4장 이미지 AI 분석
@@ -349,6 +358,8 @@ def mammography_ai_analysis(request):
 
 
 @api_view(['GET'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
 def mammography_health(request):
     """
     맘모그래피 AI 서비스 헬스 체크

@@ -122,7 +122,7 @@ def load_mri_series(image_files):
     return series_data
 
 
-def nifti_to_dicom_slices(nifti_file, patient_id=None, patient_name=None, image_type=None, orthanc_client=None):
+def nifti_to_dicom_slices(nifti_file, patient_id=None, patient_name=None, birth_date=None, gender=None, accession_number=None, referring_physician=None, image_type=None, orthanc_client=None):
     """
     NIfTI 파일을 DICOM 슬라이스들로 변환
     
@@ -130,305 +130,173 @@ def nifti_to_dicom_slices(nifti_file, patient_id=None, patient_name=None, image_
         nifti_file: 파일 경로(str/Path) 또는 파일 객체(BytesIO 등)
         patient_id: 환자 ID (선택사항)
         patient_name: 환자 이름 (선택사항)
+        birth_date: 환자 생년월일 (YYYYMMDD 형식 문자열 또는 date 객체)
+        gender: 환자 성별 ('M', 'F', 'O')
+        accession_number: Accession Number
+        referring_physician: 의뢰 의사 이름
         image_type: 영상 유형 ('유방촬영술 영상', '병리 영상', 'MRI 영상') - Study/Series 구분용
     
     Returns:
         List[bytes]: DICOM 인스턴스들의 바이트 데이터 리스트
     """
-    # NIfTI 파일 로드
     import tempfile
     import os
     import logging
+    from datetime import date
     
     logger = logging.getLogger(__name__)
     
     if hasattr(nifti_file, 'read'):
-        # 파일 객체인 경우 (BytesIO 등)
-        # nibabel.load()는 파일 경로만 받으므로 임시 파일이 필요
         if hasattr(nifti_file, 'seek'):
             nifti_file.seek(0)
-        
-        # BytesIO 내용을 읽기
         file_data = nifti_file.read()
         if len(file_data) == 0:
             raise ValueError("NIfTI file data is empty")
         
-        if hasattr(nifti_file, 'seek'):
-            nifti_file.seek(0)  # 다시 처음으로
-        
-        # 파일 확장자 확인
         file_suffix = '.nii.gz'
-        if hasattr(nifti_file, 'name'):
+        if hasattr(nifti_file, 'name') and nifti_file.name:
             if nifti_file.name.endswith('.nii.gz'):
                 file_suffix = '.nii.gz'
             elif nifti_file.name.endswith('.nii'):
                 file_suffix = '.nii'
         
-        # 임시 파일 생성 (여러 방법 시도)
-        tmp_file_path = None
-        temp_dir = None
-        
-        logger.info(f"Processing NIfTI file object, data size: {len(file_data)} bytes")
-        
-        # 방법 1: 시스템 임시 디렉토리 사용
-        try:
-            temp_dir = tempfile.gettempdir()
-            logger.info(f"Trying system temp directory: {temp_dir}")
-            if not os.path.exists(temp_dir):
-                raise OSError(f"System temp directory does not exist: {temp_dir}")
-            if not os.access(temp_dir, os.W_OK):
-                raise OSError(f"No write permission to temp directory: {temp_dir}")
-            logger.info(f"Using system temp directory: {temp_dir}")
-        except Exception as e:
-            logger.warning(f"System temp directory failed: {e}")
-            # 방법 2: 현재 작업 디렉토리의 temp_nifti 폴더 사용
-            try:
-                temp_dir = os.path.join(os.getcwd(), 'temp_nifti')
-                logger.info(f"Trying current directory temp: {temp_dir}")
-                os.makedirs(temp_dir, exist_ok=True)
-                if not os.access(temp_dir, os.W_OK):
-                    raise OSError(f"No write permission to temp directory: {temp_dir}")
-                logger.info(f"Using current directory temp: {temp_dir}")
-            except Exception as e2:
-                logger.warning(f"Current directory temp failed: {e2}")
-                # 방법 3: 프로젝트 루트의 temp_nifti 폴더 사용
-                try:
-                    # Django 프로젝트 루트 찾기 (settings.py가 있는 디렉토리)
-                    try:
-                        from django.conf import settings
-                        if hasattr(settings, 'BASE_DIR'):
-                            temp_dir = os.path.join(settings.BASE_DIR, 'temp_nifti')
-                        else:
-                            raise AttributeError("BASE_DIR not found")
-                    except (ImportError, AttributeError):
-                        # Django가 초기화되지 않았거나 BASE_DIR이 없으면 현재 파일의 상위 디렉토리 사용
-                        current_file_dir = os.path.dirname(os.path.abspath(__file__))
-                        project_root = os.path.dirname(os.path.dirname(current_file_dir))
-                        temp_dir = os.path.join(project_root, 'temp_nifti')
-                    
-                    logger.info(f"Trying project root temp: {temp_dir}")
-                    os.makedirs(temp_dir, exist_ok=True)
-                    if not os.access(temp_dir, os.W_OK):
-                        raise OSError(f"No write permission to temp directory: {temp_dir}")
-                    logger.info(f"Using project root temp: {temp_dir}")
-                except Exception as e3:
-                    logger.error(f"All temp directory attempts failed. Errors: {e}, {e2}, {e3}")
-                    raise OSError(f"Could not create or access temp directory. Tried: {tempfile.gettempdir()}, {os.path.join(os.getcwd(), 'temp_nifti')}, {temp_dir}. Errors: {e}, {e2}, {e3}")
-        
-        # 임시 파일 경로 생성
+        temp_dir = tempfile.gettempdir()
         tmp_file_path = os.path.join(temp_dir, f"nifti_{uuid.uuid4().hex}{file_suffix}")
-        logger.info(f"Creating temporary file: {tmp_file_path}")
         
         try:
-            # 파일 쓰기 (명시적으로 바이너리 모드)
-            logger.info(f"Writing {len(file_data)} bytes to temporary file")
             with open(tmp_file_path, 'wb') as tmp_file:
                 tmp_file.write(file_data)
                 tmp_file.flush()
-                os.fsync(tmp_file.fileno())  # 디스크에 강제 쓰기
-            logger.info(f"Temporary file written successfully")
-            
-            # 파일이 실제로 존재하고 읽을 수 있는지 확인
-            if not os.path.exists(tmp_file_path):
-                raise IOError(f"Temporary file was not created: {tmp_file_path}")
-            if not os.access(tmp_file_path, os.R_OK):
-                raise IOError(f"Temporary file is not readable: {tmp_file_path}")
-            
-            # 파일 크기 확인
-            file_size = os.path.getsize(tmp_file_path)
-            if file_size == 0:
-                raise IOError(f"Temporary file is empty: {tmp_file_path}")
-            if file_size != len(file_data):
-                raise IOError(f"Temporary file size mismatch: expected {len(file_data)}, got {file_size}")
-            
-            # 임시 파일에서 NIfTI 로드 (파일이 확실히 존재하는지 다시 확인)
-            if not os.path.exists(tmp_file_path):
-                raise IOError(f"Temporary file disappeared before loading: {tmp_file_path}")
-            
-            logger.info(f"Loading NIfTI from: {tmp_file_path}")
-            # nibabel.load() 호출
             nii_img = nib.load(tmp_file_path)
-            logger.info(f"NIfTI loaded successfully, shape: {nii_img.shape if hasattr(nii_img, 'shape') else 'N/A'}")
-            
-            # 중요: get_fdata()는 지연 로딩이므로 파일이 필요함
-            # 데이터를 먼저 메모리에 로드한 후에 파일 삭제
-            logger.info("Loading NIfTI data into memory (get_fdata)...")
-            volume_data = nii_img.get_fdata()  # 데이터를 메모리로 로드
-            logger.info(f"Data loaded into memory, shape: {volume_data.shape}")
-            
-            # 헤더도 미리 읽기
-            header_data = nii_img.header
-            
-            # 데이터와 헤더를 메모리에 로드했으므로 이제 파일 삭제 가능
-            # 하지만 안전을 위해 함수 종료 전까지 유지
-            # (finally 블록에서 삭제)
-            
-            # 메모리에 로드된 데이터를 변수에 저장 (try 블록 밖에서 사용)
-            volume = volume_data
-            header = header_data
-            
-        except Exception as load_error:
-            # 오류 발생 시 상세 정보 포함
-            error_msg = f"Failed to load NIfTI from temporary file: {load_error}"
-            if tmp_file_path:
-                error_msg += f"\nTemp file path: {tmp_file_path}"
-                error_msg += f"\nTemp file exists: {os.path.exists(tmp_file_path) if tmp_file_path else False}"
-                if tmp_file_path and os.path.exists(tmp_file_path):
-                    error_msg += f"\nTemp file size: {os.path.getsize(tmp_file_path)}"
-                error_msg += f"\nTemp directory: {temp_dir}"
-                error_msg += f"\nTemp directory exists: {os.path.exists(temp_dir) if temp_dir else False}"
-                error_msg += f"\nTemp directory writable: {os.access(temp_dir, os.W_OK) if temp_dir and os.path.exists(temp_dir) else False}"
-            raise IOError(error_msg) from load_error
-            
+            volume = nii_img.get_fdata()
+            header = nii_img.header
+            affine = nii_img.affine
         finally:
-            # 임시 파일 삭제 (데이터가 메모리에 로드된 후에만 삭제)
             if tmp_file_path and os.path.exists(tmp_file_path):
                 try:
                     os.unlink(tmp_file_path)
-                    logger.info(f"Temporary file deleted: {tmp_file_path}")
-                except Exception as cleanup_error:
-                    # 삭제 실패는 경고만 출력 (치명적이지 않음)
-                    logger.warning(f"Could not delete temporary file {tmp_file_path}: {cleanup_error}")
-        
-        # volume과 header는 이미 try 블록 안에서 메모리에 로드되어 변수에 저장됨
-        
+                except:
+                    pass
     elif isinstance(nifti_file, (str, Path)):
-        # 파일 경로인 경우 (파일이 계속 존재하므로 지연 로딩 가능)
         nii_img = nib.load(str(nifti_file))
         volume = nii_img.get_fdata()
         header = nii_img.header
+        affine = nii_img.affine
     else:
-        raise ValueError(f"Unsupported nifti_file type: {type(nifti_file)}. Expected file path (str/Path) or file-like object (BytesIO)")
+        raise ValueError(f"Unsupported nifti_file type: {type(nifti_file)}")
     
-    # volume과 header는 이미 위에서 설정됨 (BytesIO인 경우 try 블록에서, 파일 경로인 경우 elif에서)
-    
-    # 환자 정보 설정
     if patient_id is None:
         patient_id = "UNKNOWN"
     if patient_name is None:
         patient_name = patient_id
     
-    # 영상 유형에 따른 Study/Series 설정
+    dicom_gender = ""
+    if gender:
+        if gender.upper() in ['M', 'MALE', '남', '남성']:
+            dicom_gender = 'M'
+        elif gender.upper() in ['F', 'FEMALE', '여', '여성']:
+            dicom_gender = 'F'
+        elif gender.upper() in ['O', 'OTHER', '기타']:
+            dicom_gender = 'O'
+    
+    dicom_birth_date = ""
+    if birth_date:
+        if isinstance(birth_date, (date, datetime)):
+            dicom_birth_date = birth_date.strftime("%Y%m%d")
+        elif isinstance(birth_date, str):
+            dicom_birth_date = birth_date.replace("-", "").replace(".", "").replace("/", "")[:8]
+    
     image_type_map = {
         '유방촬영술 영상': {
             'study_description': '유방촬영술',
             'series_description': 'Mammography Series',
             'modality': 'MG',
-            'sop_class_uid': '1.2.840.10008.5.1.4.1.1.1.2'  # Digital Mammography X-Ray Image Storage
+            'sop_class_uid': '1.2.840.10008.5.1.4.1.1.1.2'
         },
         '병리 영상': {
             'study_description': '병리 영상',
             'series_description': 'Pathology Series',
-            'modality': 'SM',  # Slide Microscopy (병리 슬라이드) 또는 'OT' (Other)
-            'sop_class_uid': '1.2.840.10008.5.1.4.1.1.4'  # MR Image Storage (기본값)
+            'modality': 'SM',
+            'sop_class_uid': '1.2.840.10008.5.1.4.1.1.77.1.6'
         },
         'MRI 영상': {
             'study_description': 'MRI Study',
             'series_description': 'MRI Series',
             'modality': 'MR',
-            'sop_class_uid': '1.2.840.10008.5.1.4.1.1.4'  # MR Image Storage
+            'sop_class_uid': '1.2.840.10008.5.1.4.1.1.4'
         }
     }
-    
-    # 영상 유형별 설정 (기본값: MRI)
     settings = image_type_map.get(image_type, image_type_map['MRI 영상'])
     
-    # DICOM 메타데이터 생성
-    # 같은 환자는 하나의 Study로 통합 (기존 StudyInstanceUID 재사용)
-    # orthanc_client가 제공되면 기존 Study 찾기 시도
     study_instance_uid = None
     if orthanc_client is not None and patient_id:
         try:
-            existing_uid = orthanc_client.get_existing_study_instance_uid(patient_id)
-            if existing_uid:
-                study_instance_uid = existing_uid
-                logger.info(f"Reusing existing StudyInstanceUID for patient {patient_id}: {existing_uid[:20]}...")
-        except Exception as e:
-            logger.warning(f"Failed to get existing StudyInstanceUID, creating new one: {e}")
-    
-    # 기존 Study가 없으면 새로 생성
+            study_instance_uid = orthanc_client.get_existing_study_instance_uid(patient_id)
+        except:
+            pass
     if study_instance_uid is None:
         study_instance_uid = generate_uid()
-        logger.info(f"Creating new StudyInstanceUID for patient {patient_id}: {study_instance_uid[:20]}...")
     
-    # Series는 항상 새로 생성 (같은 Modality라도 업로드 시점이 다르면 다른 Series)
     series_instance_uid = generate_uid()
+    frame_of_reference_uid = generate_uid()
     
-    # SeriesNumber 계산 (기존 Series 개수 확인)
     series_number = 1
     if orthanc_client is not None and study_instance_uid:
         try:
             series_number = orthanc_client.get_next_series_number(study_instance_uid)
-            logger.info(f"Using SeriesNumber {series_number} for new series")
-        except Exception as e:
-            logger.warning(f"Failed to get next series number, using 1: {e}")
-            series_number = 1
+        except:
+            pass
     
-    # 볼륨의 shape 확인 및 처리
+    if not accession_number:
+        accession_number = str(uuid.uuid4())[:8].upper()
+
     if len(volume.shape) == 2:
-        # 2D 이미지인 경우
-        volume = volume[:, :, np.newaxis]  # 3D로 변환
+        volume = volume[:, :, np.newaxis]
         num_slices = 1
     elif len(volume.shape) == 3:
         num_slices = volume.shape[2]
     elif len(volume.shape) == 4:
         num_slices = volume.shape[2]
-        volume = volume[:, :, :, 0]  # 첫 번째 시간 단계만 사용
+        volume = volume[:, :, :, 0]
     else:
         raise ValueError(f"Unsupported volume shape: {volume.shape}")
     
     dicom_slices = []
+    now = datetime.now()
     
     for slice_idx in range(num_slices):
-        # 슬라이스 추출
         slice_data = volume[:, :, slice_idx]
-        
-        # 픽셀 값을 정수형으로 변환 (DICOM은 정수형 필요)
-        # NIfTI 데이터를 Hounsfield Unit 범위로 가정
-        if slice_data.dtype != np.uint16:
-            # 데이터를 적절한 범위로 스케일링
+        if slice_data.dtype != np.uint16 and slice_data.dtype != np.int16:
             min_val = slice_data.min()
             max_val = slice_data.max()
-            
             if max_val > 32767:
-                # float 데이터인 경우 -1024 to 3071 (일반적인 CT 범위)로 매핑
-                slice_data = np.clip(slice_data, -1024, 3071)
-                slice_data = slice_data.astype(np.int16)
+                slice_data = np.clip(slice_data, -1024, 3071).astype(np.int16)
             else:
                 slice_data = slice_data.astype(np.int16)
         
-        # DICOM 데이터셋 생성
         ds = Dataset()
-        
-        # 한글 지원을 위해 문자셋 설정 (UTF-8)
-        ds.SpecificCharacterSet = 'ISO_IR 192'  # UTF-8
-        
-        # 필수 DICOM 태그 (DICOM 태그 형식으로 명시적 설정)
-        from pydicom.tag import Tag
-        ds.PatientID = str(patient_id)  # (0010,0020)
-        ds.PatientName = str(patient_name)  # (0010,0010)
-        ds.PatientBirthDate = ""  # (0010,0030)
-        ds.PatientSex = ""  # (0010,0040)
-        
-        # 디버깅: PatientID와 PatientName 확인
-        print(f"DICOM Slice {slice_idx + 1}: PatientID={ds.PatientID}, PatientName={ds.PatientName}")
-        
+        ds.SpecificCharacterSet = 'ISO_IR 192'
+        ds.PatientID = str(patient_id)
+        ds.PatientName = str(patient_name)
+        ds.PatientBirthDate = dicom_birth_date
+        ds.PatientSex = dicom_gender
         ds.StudyInstanceUID = study_instance_uid
-        ds.StudyDate = datetime.now().strftime("%Y%m%d")
-        ds.StudyTime = datetime.now().strftime("%H%M%S")
-        ds.StudyID = str(uuid.uuid4())[:8]
+        ds.StudyDate = now.strftime("%Y%m%d")
+        ds.StudyTime = now.strftime("%H%M%S")
+        ds.StudyID = accession_number[:8]
         ds.StudyDescription = settings['study_description']
-        
+        ds.AccessionNumber = accession_number
+        ds.ReferringPhysicianName = str(referring_physician or "")
         ds.SeriesInstanceUID = series_instance_uid
-        ds.SeriesNumber = str(series_number)  # 정수형을 문자열로 변환 (DICOM IS 타입)
-        ds.SeriesDescription = settings['series_description']  # 영상 유형별 Description
+        ds.SeriesNumber = str(series_number)
+        ds.SeriesDescription = settings['series_description']
         ds.Modality = settings['modality']
-        
         ds.InstanceNumber = str(slice_idx + 1)
         ds.SOPInstanceUID = generate_uid()
         ds.SOPClassUID = settings['sop_class_uid']
-        
-        # 이미지 파라미터
+        ds.Manufacturer = "Konyang Univ Biomedical"
+        ds.ManufacturerModelName = "NII-to-DICOM Converter"
+        ds.InstitutionName = "GYU Hospital"
         ds.Rows = slice_data.shape[0]
         ds.Columns = slice_data.shape[1]
         ds.BitsAllocated = 16
@@ -438,46 +306,53 @@ def nifti_to_dicom_slices(nifti_file, patient_id=None, patient_name=None, image_
         ds.SamplesPerPixel = 1
         ds.PhotometricInterpretation = "MONOCHROME2"
         
-        # 슬라이스 위치 (간단한 추정)
         try:
-            if hasattr(header, 'get'):
-                pixdim = header.get('pixdim', [1, 1, 1, 1])
-                slice_thickness = float(pixdim[3]) if len(pixdim) > 3 else 1.0
+            if affine is not None and affine.shape == (4, 4):
+                px_x = float(np.sqrt(affine[0, 0]**2 + affine[1, 0]**2 + affine[2, 0]**2))
+                px_y = float(np.sqrt(affine[0, 1]**2 + affine[1, 1]**2 + affine[2, 1]**2))
+                ds.PixelSpacing = [str(px_y), str(px_x)]
+                thick = float(np.sqrt(affine[0, 2]**2 + affine[1, 2]**2 + affine[2, 2]**2))
+                ds.SliceThickness = str(thick)
+                col_dir = affine[:3, 0] / (px_x if px_x > 0 else 1.0)
+                row_dir = affine[:3, 1] / (px_y if px_y > 0 else 1.0)
+                ds.ImageOrientationPatient = [
+                    str(float(col_dir[0])), str(float(col_dir[1])), str(float(col_dir[2])),
+                    str(float(row_dir[0])), str(float(row_dir[1])), str(float(row_dir[2]))
+                ]
+                pos = affine @ np.array([0, 0, slice_idx, 1])
+                ds.ImagePositionPatient = [str(float(pos[0])), str(float(pos[1])), str(float(pos[2]))]
+                ds.SliceLocation = str(float(pos[2]))
             else:
-                slice_thickness = 1.0
+                ds.PixelSpacing = ["1.0", "1.0"]
+                ds.SliceThickness = "1.0"
+                ds.ImageOrientationPatient = ["1", "0", "0", "0", "1", "0"]
+                ds.ImagePositionPatient = ["0", "0", str(float(slice_idx))]
+                ds.SliceLocation = str(float(slice_idx))
         except:
-            slice_thickness = 1.0
-        
-        slice_location = slice_idx * slice_thickness
-        ds.SliceLocation = str(slice_location)
-        ds.SliceThickness = str(slice_thickness)
-        
-        # 픽셀 데이터 (numpy 배열을 직접 할당)
+            ds.PixelSpacing = ["1.0", "1.0"]
+            ds.SliceThickness = "1.0"
+            ds.ImageOrientationPatient = ["1", "0", "0", "0", "1", "0"]
+            ds.ImagePositionPatient = ["0", "0", str(float(slice_idx))]
+            ds.SliceLocation = str(float(slice_idx))
+            
+        ds.FrameOfReferenceUID = frame_of_reference_uid
         ds.PixelData = slice_data.tobytes()
         
-        # 파일로 저장 (메모리)
         buffer = BytesIO()
-        
-        # DICOM File Meta Information 설정 (필수)
         file_meta = Dataset()
         file_meta.MediaStorageSOPClassUID = ds.SOPClassUID
         file_meta.MediaStorageSOPInstanceUID = ds.SOPInstanceUID
         file_meta.ImplementationClassUID = "1.2.3.4.5.6.7.8.9"
-        # TransferSyntaxUID 필수 추가 (Explicit VR Little Endian)
-        file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'  # Explicit VR Little Endian
-        
-        # 데이터셋에 파일 메타 정보 연결
+        file_meta.TransferSyntaxUID = '1.2.840.10008.1.2.1'
         ds.file_meta = file_meta
-        ds.is_implicit_VR = False  # Explicit VR
-        ds.is_little_endian = True  # Little Endian
-        
+        ds.is_implicit_VR = False
+        ds.is_little_endian = True
         pydicom.dcmwrite(buffer, ds, write_like_original=False)
         dicom_slices.append(buffer.getvalue())
     
     return dicom_slices
 
-
-def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_description="Heatmap Image", modality="MG", orthanc_client=None, study_instance_uid=None):
+def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, birth_date=None, gender=None, accession_number=None, series_description="Heatmap Image", modality="MG", orthanc_client=None, study_instance_uid=None):
     """
     PIL Image를 DICOM으로 변환
     
@@ -485,6 +360,9 @@ def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_des
         pil_image: PIL Image 객체
         patient_id: 환자 ID
         patient_name: 환자 이름
+        birth_date: 환자 생년월일
+        gender: 환자 성별
+        accession_number: Accession Number
         series_description: Series 설명
         modality: Modality (기본값: MG - Mammography)
         orthanc_client: OrthancClient 인스턴스 (기존 Study 찾기용, 선택사항)
@@ -494,6 +372,7 @@ def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_des
         bytes: DICOM 파일의 바이트 데이터
     """
     import numpy as np
+    from datetime import date
     
     # PIL Image를 numpy 배열로 변환 (컬러 이미지 유지)
     is_color = pil_image.mode in ('RGB', 'RGBA')
@@ -512,26 +391,40 @@ def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_des
             # 2D 그레이스케일을 3D로 확장 (H, W) -> (H, W, 1)
             img_array = img_array[:, :, np.newaxis]
     
-    # 컬러 이미지인 경우 (H, W, 3) 형태
-    if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
-        # RGB 이미지를 uint16으로 변환 (각 채널별로)
-        if img_array.dtype != np.uint16:
-            # 0-65535 범위로 스케일링 (각 채널별)
-            if img_array.max() > 0:
-                img_array = (img_array.astype(np.float32) / 255.0 * 65535).astype(np.uint16)
-            else:
-                img_array = img_array.astype(np.uint16)
+    # SM 모달리티(병리 이미지)는 uint8 사용, 다른 모달리티는 uint16 사용
+    if modality == "SM":
+        # SM 모달리티: RGB 이미지를 uint8로 유지 (병리 이미지는 컬러 정보가 중요)
+        if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
+            # RGB 이미지를 uint8로 유지
+            if img_array.dtype != np.uint8:
+                img_array = img_array.astype(np.uint8)
+        else:
+            # 그레이스케일 이미지 처리
+            if len(img_array.shape) == 3:
+                img_array = img_array[:, :, 0]  # 첫 번째 채널만 사용
+            if img_array.dtype != np.uint8:
+                img_array = img_array.astype(np.uint8)
     else:
-        # 그레이스케일 이미지 처리
-        if len(img_array.shape) == 3:
-            img_array = img_array[:, :, 0]  # 첫 번째 채널만 사용
-        
-        # uint16으로 변환
-        if img_array.dtype != np.uint16:
-            if img_array.max() > 0:
-                img_array = (img_array.astype(np.float32) / img_array.max() * 65535).astype(np.uint16)
-            else:
-                img_array = img_array.astype(np.uint16)
+        # 다른 모달리티: uint16 사용
+        if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
+            # RGB 이미지를 uint16으로 변환 (각 채널별로)
+            if img_array.dtype != np.uint16:
+                # 0-65535 범위로 스케일링 (각 채널별)
+                if img_array.max() > 0:
+                    img_array = (img_array.astype(np.float32) / 255.0 * 65535).astype(np.uint16)
+                else:
+                    img_array = img_array.astype(np.uint16)
+        else:
+            # 그레이스케일 이미지 처리
+            if len(img_array.shape) == 3:
+                img_array = img_array[:, :, 0]  # 첫 번째 채널만 사용
+            
+            # uint16으로 변환
+            if img_array.dtype != np.uint16:
+                if img_array.max() > 0:
+                    img_array = (img_array.astype(np.float32) / img_array.max() * 65535).astype(np.uint16)
+                else:
+                    img_array = img_array.astype(np.uint16)
     
     # 환자 정보 설정
     if patient_id is None:
@@ -557,6 +450,9 @@ def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_des
     # DICOM 데이터셋 생성
     ds = Dataset()
     
+    # 한글 지원을 위한 문자셋 설정 (PatientName에 한글이 포함될 수 있음)
+    ds.SpecificCharacterSet = 'ISO_IR 192'  # UTF-8
+    
     # 필수 DICOM 태그
     ds.PatientID = str(patient_id)
     ds.PatientName = str(patient_name)
@@ -568,7 +464,13 @@ def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_des
     ds.StudyDate = datetime.now().strftime("%Y%m%d")
     ds.StudyTime = datetime.now().strftime("%H%M%S")
     ds.StudyID = str(uuid.uuid4())[:8]
-    ds.StudyDescription = "Mammography Analysis"
+    # Modality에 따라 StudyDescription 설정
+    if modality == "SM":
+        ds.StudyDescription = "Pathology Analysis"
+    else:
+        ds.StudyDescription = "Mammography Analysis"
+    ds.AccessionNumber = ""  # Accession Number
+    ds.ReferringPhysicianName = ""  # Referring Physician Name
     
     # Series 정보
     ds.SeriesInstanceUID = generate_uid()
@@ -579,37 +481,65 @@ def pil_image_to_dicom(pil_image, patient_id=None, patient_name=None, series_des
     # Instance 정보
     ds.InstanceNumber = "1"
     ds.SOPInstanceUID = generate_uid()
-    ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.1.2"  # Digital Mammography X-Ray Image Storage
+    # Modality에 따라 SOPClassUID 설정
+    if modality == "SM":
+        ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.77.1.6"  # VL Whole Slide Microscopy Image Storage
+    else:
+        ds.SOPClassUID = "1.2.840.10008.5.1.4.1.1.1.2"  # Digital Mammography X-Ray Image Storage
     
-    # 이미지 파라미터
+    # 이미지 파라미터 (SM 모달리티는 uint8, 다른 모달리티는 uint16)
     ds.Rows = img_array.shape[0]
     ds.Columns = img_array.shape[1]
-    ds.BitsAllocated = 16
-    ds.BitsStored = 16
-    ds.HighBit = 15
-    ds.PixelRepresentation = 0  # Unsigned
     
-    # 컬러 이미지인 경우 RGB 설정
-    if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
-        ds.SamplesPerPixel = 3
-        ds.PhotometricInterpretation = "RGB"
-        ds.PlanarConfiguration = 0  # 0 = interleaved (RGBRGBRGB...)
-        # 픽셀 데이터를 interleaved 형식으로 변환 (R, G, B 순서)
-        # (H, W, 3) -> (H*W, 3) -> (H*W*3) 형태로 변환
-        # 각 픽셀의 R, G, B 값이 연속적으로 배치되도록
-        h, w = img_array.shape[:2]
-        pixel_data = img_array.reshape(h * w, 3).astype(np.uint16)
-        # uint16 배열을 바이트로 변환 (little-endian)
-        pixel_data = pixel_data.tobytes()
-        logger.info(f"✅ RGB 컬러 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
+    if modality == "SM":
+        # SM 모달리티: uint8 사용
+        ds.BitsAllocated = 8
+        ds.BitsStored = 8
+        ds.HighBit = 7
+        ds.PixelRepresentation = 0  # Unsigned
+        
+        # 컬러 이미지인 경우 RGB 설정
+        if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
+            ds.SamplesPerPixel = 3
+            ds.PhotometricInterpretation = "RGB"
+            ds.PlanarConfiguration = 0  # 0 = interleaved (RGBRGBRGB...)
+            # 픽셀 데이터를 interleaved 형식으로 변환 (R, G, B 순서)
+            h, w = img_array.shape[:2]
+            pixel_data = img_array.reshape(h * w, 3).astype(np.uint8)
+            pixel_data = pixel_data.tobytes()
+            logger.info(f"✅ SM 모달리티 RGB 컬러 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
+        else:
+            ds.SamplesPerPixel = 1
+            ds.PhotometricInterpretation = "MONOCHROME2"
+            if len(img_array.shape) == 3:
+                img_array = img_array[:, :, 0]
+            pixel_data = img_array.astype(np.uint8).tobytes()
+            logger.info(f"✅ SM 모달리티 그레이스케일 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
     else:
-        ds.SamplesPerPixel = 1
-        ds.PhotometricInterpretation = "MONOCHROME2"
-        # 그레이스케일 이미지
-        if len(img_array.shape) == 3:
-            img_array = img_array[:, :, 0]
-        pixel_data = img_array.astype(np.uint16).tobytes()
-        logger.info(f"✅ 그레이스케일 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
+        # 다른 모달리티: uint16 사용
+        ds.BitsAllocated = 16
+        ds.BitsStored = 16
+        ds.HighBit = 15
+        ds.PixelRepresentation = 0  # Unsigned
+        
+        # 컬러 이미지인 경우 RGB 설정
+        if is_color and len(img_array.shape) == 3 and img_array.shape[2] == 3:
+            ds.SamplesPerPixel = 3
+            ds.PhotometricInterpretation = "RGB"
+            ds.PlanarConfiguration = 0  # 0 = interleaved (RGBRGBRGB...)
+            # 픽셀 데이터를 interleaved 형식으로 변환 (R, G, B 순서)
+            h, w = img_array.shape[:2]
+            pixel_data = img_array.reshape(h * w, 3).astype(np.uint16)
+            pixel_data = pixel_data.tobytes()
+            logger.info(f"✅ RGB 컬러 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
+        else:
+            ds.SamplesPerPixel = 1
+            ds.PhotometricInterpretation = "MONOCHROME2"
+            # 그레이스케일 이미지
+            if len(img_array.shape) == 3:
+                img_array = img_array[:, :, 0]
+            pixel_data = img_array.astype(np.uint16).tobytes()
+            logger.info(f"✅ 그레이스케일 이미지 처리: shape={img_array.shape}, pixel_data size={len(pixel_data)} bytes")
     
     # 픽셀 데이터
     ds.PixelData = pixel_data

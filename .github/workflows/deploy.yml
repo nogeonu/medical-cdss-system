@@ -2,7 +2,7 @@ name: Deploy to GCE VM
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   workflow_dispatch:
 
 concurrency:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Prepare remote directory
+      - name: Clean remote directory and fix permissions
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
@@ -27,15 +27,17 @@ jobs:
           script: |
             set -e
             APP_DIR="${{ secrets.APP_DIR }}"
-            sudo mkdir -p "$APP_DIR"
-            sudo chown -R $USER:$USER "$APP_DIR"
+            
+            # 권한 정리 (staticfiles, __pycache__ 등)
+            sudo chown -R $USER:$USER "$APP_DIR" || true
             sudo rm -rf "$APP_DIR/backend/staticfiles" || true
-            find "$APP_DIR" -name "__pycache__" -type d -exec rm -rf {} + || true
+            find "$APP_DIR/backend" -type d -name "__pycache__" -exec sudo rm -rf {} + || true
+            find "$APP_DIR/backend" -type f -name "*.pyc" -delete || true
 
-      - name: Sync project to VM
+      - name: Sync project to VM (rsync)
         uses: burnett01/rsync-deployments@5.2
         with:
-          switches: -avz --delete --exclude ".git" --exclude "node_modules" --exclude "frontend/dist" --exclude ".venv" --exclude "venv" --exclude "backend/staticfiles" --exclude "*.pyc" --exclude "__pycache__" --exclude "*.pt" --exclude "*.pth" --exclude ".DS_Store" --exclude "*.log"
+          switches: -avz --exclude ".git" --exclude "node_modules" --exclude ".venv" --exclude "venv" --exclude "frontend/dist" --exclude ".DS_Store" --exclude "backend/staticfiles" --exclude "backend/*.pyc" --exclude "backend/*/__pycache__"
           path: ./
           remote_path: ${{ secrets.APP_DIR }}/
           remote_host: ${{ secrets.SSH_HOST }}
@@ -43,204 +45,66 @@ jobs:
           remote_key: ${{ secrets.SSH_KEY }}
           remote_port: ${{ secrets.SSH_PORT }}
 
-      - name: Verify ocs directory (CDSS_Final_Package backend files)
+      - name: Remote deploy steps
         uses: appleboy/ssh-action@v1.2.0
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          script: |
-            APP_DIR="${{ secrets.APP_DIR }}"
-            OCS_DIR="$APP_DIR/backend/ocs"
-            
-            # 조원의 CDSS_Final_Package README.md 권장 위치: backend/ocs/
-            mkdir -p "$OCS_DIR" || true
-            
-            # ocs 디렉토리 확인
-            if [ -f "$OCS_DIR/main.py" ]; then
-              echo "✅ FastAPI main.py 파일 확인 완료: $OCS_DIR/main.py"
-              ls -la "$OCS_DIR" | head -10
-            else
-              echo "⚠️ FastAPI main.py 파일이 없습니다: $OCS_DIR"
-              echo "   배포는 계속 진행되지만 약물 검색 기능이 작동하지 않을 수 있습니다."
-            fi
-
-      - name: Install dependencies and restart services
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          port: ${{ secrets.SSH_PORT }}
-          command_timeout: 30m
           script_stop: true
           script: |
             set -e
             APP_DIR="${{ secrets.APP_DIR }}"
 
-            # 백엔드: 가상환경 설정
-            echo "📦 백엔드 설정 중..."
-            cd "$APP_DIR/backend" || { echo "❌ backend 디렉토리 없음"; exit 1; }
+            # 권한 수정
+            sudo chown -R $USER:$USER "$APP_DIR"
+
+            # --- Django backend ---
+            cd "$APP_DIR/backend"
             python3 -m venv .venv || true
-            source .venv/bin/activate || { echo "❌ 가상환경 활성화 실패"; exit 1; }
-            pip install --upgrade pip || { echo "⚠️ pip 업그레이드 실패, 계속 진행..."; }
-            echo "📦 Python 패키지 설치 중 (requirements.txt)..."
-            if ! pip install -r requirements.txt; then
-              echo "❌ 패키지 설치 실패, 상세 오류:"
-              pip install -r requirements.txt 2>&1 | tail -30
-              exit 1
-            fi
-            
-            # DB 마이그레이션 및 정적 파일 수집
-            echo "🗄️ DB 마이그레이션 중..."
-            python manage.py migrate --noinput || { echo "⚠️ 마이그레이션 실패, 계속 진행..."; }
-            python manage.py collectstatic --noinput || { echo "⚠️ 정적 파일 수집 실패, 계속 진행..."; }
+            source .venv/bin/activate
+            pip install --upgrade pip
+            pip install -r requirements.txt
 
-            # 프론트엔드: 의존성 설치 및 빌드
-            echo "📦 프론트엔드 빌드 중..."
-            cd "$APP_DIR/frontend" || { echo "❌ frontend 디렉토리 없음"; exit 1; }
-            if ! npm ci; then
-              echo "❌ npm 의존성 설치 실패, 상세 오류:"
-              npm ci 2>&1 | tail -30
-              exit 1
-            fi
-            export NODE_OPTIONS="--max-old-space-size=2048"
-            # dist 디렉토리 준비 (.DS_Store 파일 제거)
-            find . -name ".DS_Store" -type f -delete || true
-            mkdir -p dist
-            sudo rm -rf dist/* || true
-            chmod -R 755 dist || true
-            echo "🔨 TypeScript 컴파일 및 Vite 빌드 시작..."
-            echo "   메모리 제한: 2048MB"
-            echo "   타임아웃: 30분"
-            if ! timeout 1800 npm run build; then
-              echo "❌ 프론트엔드 빌드 실패 또는 타임아웃, 상세 오류:"
-              npm run build 2>&1 | tail -50
-              exit 1
-            fi
-            # 빌드 후 권한 설정
-            chmod -R 755 dist
-            sudo chown -R www-data:www-data dist || true
+            # DB 마이그레이션/정적파일
+            python manage.py migrate
+            python manage.py collectstatic --noinput
 
-            # mammography-ai-service 중지 및 비활성화 (Flask 서비스로 통합)
-            sudo systemctl stop mammography-ai-service 2>/dev/null || true
-            sudo systemctl disable mammography-ai-service 2>/dev/null || true
-            
-            # Flask ML Service systemd 설정 (폐암 ML + YOLO 모델 포함)
-            printf '[Unit]\nDescription=Flask ML Service (Lung Cancer + YOLO Mammography)\nAfter=network.target\n\n[Service]\nType=simple\nUser=%s\nWorkingDirectory=%s/backend/ml_service\nEnvironment="PATH=%s/backend/.venv/bin"\nEnvironment="MAMMOGRAPHY_MODEL_PATH=/home/shrjsdn908/models/yolo11_mammography/best.pt"\nExecStart=%s/backend/.venv/bin/python app.py\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\n' "$USER" "$APP_DIR" "$APP_DIR" "$APP_DIR" | sudo tee /etc/systemd/system/ml-service.service > /dev/null
-            
+            # --- React frontend ---
+            cd "$APP_DIR/frontend"
+            if ! command -v npm >/dev/null 2>&1; then
+              curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+              sudo apt-get install -y nodejs
+            fi
+            # node_modules, dist 캐시 완전 삭제
+            rm -rf node_modules dist .next
+            npm ci
+            npm run build
+
+            # --- 서비스 재시작 ---
+            # Daphne 서비스 파일 업데이트 (WebSocket 지원을 위해 ASGI 서버 사용)
+            echo '[Unit]' | sudo tee /etc/systemd/system/daphne.service
+            echo 'Description=Daphne ASGI server for Django' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'After=network.target' | sudo tee -a /etc/systemd/system/daphne.service
+            echo '' | sudo tee -a /etc/systemd/system/daphne.service
+            echo '[Service]' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'User=shrjsdn908' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'Group=shrjsdn908' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'WorkingDirectory=/srv/django-react/app/backend' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'Environment=PATH=/srv/django-react/app/backend/.venv/bin' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'Environment="USE_LOCAL_INFERENCE=true"' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'ExecStart=/srv/django-react/app/backend/.venv/bin/daphne -b 127.0.0.1 -p 8000 eventeye.asgi:application' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'Restart=always' | sudo tee -a /etc/systemd/system/daphne.service
+            echo '' | sudo tee -a /etc/systemd/system/daphne.service
+            echo '[Install]' | sudo tee -a /etc/systemd/system/daphne.service
+            echo 'WantedBy=multi-user.target' | sudo tee -a /etc/systemd/system/daphne.service
             sudo systemctl daemon-reload
-            sudo systemctl enable ml-service
-            sudo systemctl restart ml-service || sudo systemctl start ml-service
-            
-            # 프론트엔드 dist 디렉토리 최종 권한 설정
-            sudo chown -R www-data:www-data "$APP_DIR/frontend/dist" || true
-            sudo chmod -R 755 "$APP_DIR/frontend/dist" || true
-            
-            # H-optimus-0 모델은 이미 캐시에 다운로드되어 있음 (~/.cache/huggingface/hub/)
-            # 모델이 없을 경우에만 수동으로 다운로드 필요
-            echo "💡 H-optimus-0 모델은 이미 캐시에 저장되어 있습니다."
-            echo "   캐시 위치: ~/.cache/huggingface/hub/models--bioptimus--H-optimus-0"
-            
-            # FastAPI 약물 검색 서비스 설정 (조원의 CDSS_Final_Package 구조 참고)
-            # README.md 권장: backend/ocs/ 위치, 포트 8002, hospital_db 사용
-            # 이 블록은 선택적이므로 오류가 발생해도 배포는 계속 진행
-            (
-                set +e  # 이 서브셸 내에서는 오류 무시
-                echo "💊 FastAPI 약물 검색 서비스 설정 중..."
-                OCS_DIR="$APP_DIR/backend/ocs"
-                
-                # ocs 디렉토리가 없으면 생성
-                mkdir -p "$OCS_DIR" || true
-                
-                if [ -d "$OCS_DIR" ] && [ -f "$OCS_DIR/main.py" ]; then
-                    echo "✅ FastAPI 서비스 디렉토리 발견: $OCS_DIR"
-                    
-                    # .env 파일 생성 (DB 설정) - 이미 있으면 스킵
-                    if [ ! -f "$OCS_DIR/.env" ]; then
-                        echo "📝 .env 파일 생성 중..."
-                        mkdir -p "$OCS_DIR" || true
-                        echo "DB_HOST=localhost" > "$OCS_DIR/.env"
-                        echo "DB_PORT=3306" >> "$OCS_DIR/.env"
-                        echo "DB_USER=acorn" >> "$OCS_DIR/.env"
-                        echo "DB_PASSWORD=acorn1234" >> "$OCS_DIR/.env"
-                        echo "DB_NAME=hospital_db" >> "$OCS_DIR/.env"
-                        echo "DB_POOL_SIZE=5" >> "$OCS_DIR/.env"
-                        echo "✅ .env 파일 생성 완료"
-                    else
-                        echo "ℹ️ .env 파일이 이미 존재합니다. 스킵합니다."
-                    fi
-                    
-                    # FastAPI 의존성 설치 - 이미 설치되어 있으면 스킵
-                    echo "📦 FastAPI 패키지 확인 중..."
-                    if python -c "import fastapi, uvicorn, pymysql" 2>/dev/null; then
-                        echo "   ✅ FastAPI 패키지가 이미 설치되어 있습니다. 스킵합니다."
-                    else
-                        echo "   📦 FastAPI 패키지 설치 중..."
-                        if [ -f "$OCS_DIR/requirements.txt" ]; then
-                            echo "      requirements.txt 파일 발견, 설치 중..."
-                            pip install -r "$OCS_DIR/requirements.txt" || {
-                                echo "⚠️ requirements.txt 설치 실패, 기본 패키지 설치 시도..."
-                                pip install fastapi uvicorn pymysql python-dotenv openai requests pydantic || {
-                                    echo "⚠️ FastAPI 패키지 설치 실패"
-                                }
-                            }
-                        else
-                            echo "      requirements.txt 없음, 기본 패키지 설치 중..."
-                            pip install fastapi uvicorn pymysql python-dotenv openai requests pydantic || {
-                                echo "⚠️ FastAPI 패키지 설치 실패"
-                            }
-                        fi
-                    fi
-                    
-                    # systemd 서비스 설정 - 이미 설정되어 있으면 스킵
-                    if [ -f "/etc/systemd/system/drug-api-service.service" ]; then
-                        echo "ℹ️ systemd 서비스가 이미 설정되어 있습니다."
-                        echo "   서비스만 재시작합니다..."
-                        sudo systemctl daemon-reload || echo "⚠️ systemd daemon-reload 실패"
-                        sudo systemctl restart drug-api-service 2>/dev/null || sudo systemctl start drug-api-service 2>/dev/null || {
-                            echo "⚠️ drug-api-service 재시작 실패"
-                        }
-                    else
-                        echo "⚙️ systemd 서비스 설정 중..."
-                        sudo mkdir -p /etc/systemd/system || true
-                        
-                        printf '[Unit]\nDescription=FastAPI Drug Search and Interaction Service\nAfter=network.target mysql.service\n\n[Service]\nType=simple\nUser=%s\nGroup=%s\nWorkingDirectory=%s\nEnvironment="PATH=%s/backend/.venv/bin"\nEnvironment="PYTHONPATH=%s/backend"\nExecStart=%s/backend/.venv/bin/uvicorn ocs.main:app --host 0.0.0.0 --port 8002 --workers 2\nRestart=always\nRestartSec=10\nStandardOutput=journal\nStandardError=journal\n\n[Install]\nWantedBy=multi-user.target\n' "$USER" "$USER" "$OCS_DIR" "$APP_DIR" "$APP_DIR" "$APP_DIR" | sudo tee /etc/systemd/system/drug-api-service.service > /dev/null || {
-                            echo "⚠️ systemd 서비스 파일 생성 실패"
-                        }
-                        
-                        sudo systemctl daemon-reload || echo "⚠️ systemd daemon-reload 실패"
-                        sudo systemctl enable drug-api-service || echo "⚠️ drug-api-service enable 실패"
-                        sudo systemctl restart drug-api-service 2>/dev/null || sudo systemctl start drug-api-service 2>/dev/null || {
-                            echo "⚠️ drug-api-service 시작 실패"
-                        }
-                    fi
-                    echo "✅ FastAPI 약물 검색 서비스 설정 완료"
-                else
-                    echo "⚠️ FastAPI 서비스 디렉토리 또는 main.py가 없습니다: $OCS_DIR"
-                    echo "   조원의 CDSS_Final_Package/backend 파일들을 $OCS_DIR에 복사해주세요."
-                    echo "   배포는 계속 진행되지만 약물 검색 기능이 작동하지 않을 수 있습니다."
-                fi
-            ) || echo "⚠️ FastAPI 서비스 설정 중 오류 발생, 배포는 계속 진행합니다."
-            
-            # Mosec AI 서비스 재시작
-            echo "🔄 Mosec AI 서비스 재시작 중..."
-            sudo systemctl restart segmentation-mosec 2>/dev/null || echo "⚠️ segmentation-mosec 서비스 없음"
-            sudo systemctl restart mammography-mosec 2>/dev/null || echo "⚠️ mammography-mosec 서비스 없음"
-            sudo systemctl restart pathology-mosec 2>/dev/null || echo "⚠️ pathology-mosec 서비스 없음"
-            
-            # Gunicorn 서비스 설정 (timeout 30분)
-            echo "⚙️ Gunicorn 서비스 설정 중..."
-            printf '[Unit]\nDescription=Gunicorn daemon for Django\nAfter=network.target\n\n[Service]\nUser=%s\nGroup=%s\nWorkingDirectory=%s/backend\nEnvironment="PATH=%s/backend/.venv/bin"\nExecStart=%s/backend/.venv/bin/gunicorn eventeye.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 1800\nRestart=always\nRestartSec=10\n\n[Install]\nWantedBy=multi-user.target\n' "$USER" "$USER" "$APP_DIR" "$APP_DIR" "$APP_DIR" | sudo tee /etc/systemd/system/gunicorn.service > /dev/null
-            sudo systemctl daemon-reload || echo "⚠️ systemd daemon-reload 실패"
-            sudo systemctl enable gunicorn || echo "⚠️ gunicorn enable 실패"
-            
-            echo "🔄 Django 서비스 재시작 중..."
-            sudo systemctl restart gunicorn 2>/dev/null || sudo systemctl start gunicorn 2>/dev/null || echo "⚠️ gunicorn 재시작 실패"
-            
-            echo "🔄 Nginx 재시작 중..."
-            sudo systemctl restart nginx 2>/dev/null || sudo systemctl start nginx 2>/dev/null || echo "⚠️ nginx 재시작 실패"
-            
-            echo "✅ 배포 완료!"
+            # gunicorn이 실행 중이면 중지 (포트 충돌 방지)
+            sudo systemctl stop gunicorn || true
+            sudo systemctl disable gunicorn || true
+            # daphne 재시작
+            sudo systemctl restart daphne || sudo systemctl start daphne
+            sudo systemctl enable daphne || true
+            sudo systemctl reload nginx || sudo systemctl restart nginx
 

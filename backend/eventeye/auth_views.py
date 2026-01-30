@@ -67,6 +67,14 @@ def login(request):
     actual_role = get_role_from_user(user)
 
     django_login(request, user)
+    try:
+        doctor_id = get_doctor_id(user.id)
+        department = get_department(user.id)
+    except Exception as e:
+        print(f"[로그인] doctor_id/department 조회 오류: {e}")
+        doctor_id = None
+        department = None
+    
     return JsonResponse({
         "id": user.id,
         "username": user.username,
@@ -74,8 +82,8 @@ def login(request):
         "first_name": getattr(user, 'first_name', ''),
         "last_name": getattr(user, 'last_name', ''),
         "role": actual_role,
-        "doctor_id": get_doctor_id(user.id),
-        "department": get_department(user.id),
+        "doctor_id": doctor_id,
+        "department": department,
     })
 
 

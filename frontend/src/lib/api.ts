@@ -264,6 +264,27 @@ export const createImagingAnalysisApi = async (data: Record<string, unknown> | F
   return res.data;
 };
 
+// 검사 결과 입력 API
+export const inputLabResultApi = async (orderId: string, data: {
+  test_results?: any;
+  ai_findings?: string;
+  ai_confidence_score?: number;
+  ai_report_image?: string;
+  ai_prediction?: string;
+  notes?: string;
+}) => {
+  const res = await apiClient.post(`/api/ocs/orders/${orderId}/input_lab_result/`, data);
+  return res.data;
+};
+
+export const inputPathologyResultApi = async (orderId: string, data: {
+  findings?: string;
+  recommendations?: string;
+}) => {
+  const res = await apiClient.post(`/api/ocs/orders/${orderId}/input_pathology_result/`, data);
+  return res.data;
+};
+
 // 약물 검색 및 상호작용 검사 API
 export interface Drug {
   item_seq: string;
@@ -312,6 +333,54 @@ export const checkDrugInteractionsApi = async (itemSeqs: string[]): Promise<Drug
   const res = await apiClient.post('/api/ocs/drugs/check-interactions/', {
     item_seqs: itemSeqs,
   });
+  return res.data;
+};
+
+// LIS (Laboratory Information System) API
+export const getLabTestsApi = async (params?: Record<string, unknown>) => {
+  const res = await apiClient.get('/api/lis/lab-tests/', { params });
+  return res.data;
+};
+
+export const getRNATestsApi = async (params?: Record<string, unknown>) => {
+  const res = await apiClient.get('/api/lis/rna-tests/', { params });
+  return res.data;
+};
+
+export const uploadLabTestCsvApi = async (fileOrFormData: File | FormData) => {
+  let formData: FormData;
+  if (fileOrFormData instanceof FormData) {
+    formData = fileOrFormData;
+  } else {
+    formData = new FormData();
+    formData.append('file', fileOrFormData);
+  }
+  const res = await apiClient.post('/api/lis/lab-tests/upload_csv/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return res.data;
+};
+
+export const uploadRNATestCsvApi = async (fileOrFormData: File | FormData) => {
+  let formData: FormData;
+  if (fileOrFormData instanceof FormData) {
+    formData = fileOrFormData;
+  } else {
+    formData = new FormData();
+    formData.append('file', fileOrFormData);
+  }
+  const res = await apiClient.post('/api/lis/rna-tests/upload_csv/', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+  return res.data;
+};
+
+export const predictPCRApi = async (rnaTestId: number) => {
+  const res = await apiClient.post(`/api/lis/rna-tests/${rnaTestId}/predict_pcr/`);
   return res.data;
 };
 

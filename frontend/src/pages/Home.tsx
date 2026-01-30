@@ -14,17 +14,20 @@ import {
   Calendar,
   User,
   Menu,
-  X
+  X,
+  LogOut
 } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import PatientChatbotWidget from "@/components/PatientChatbotWidget";
 
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const { patientUser } = useAuth();
+  const { patientUser, setPatientUser } = useAuth();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -38,7 +41,7 @@ const navItems = [
     { name: "병원소개", path: "#about" },
     { name: "진료안내", path: "/patient/doctors" },
     { name: "의료진소개", path: "/patient/doctors" },
-    { name: "건강정보", path: "#health-info" },
+    { name: "건강정보", path: "/health-info" },
     { name: "고객센터", path: "#contact" },
 ];
 
@@ -84,18 +87,48 @@ const navItems = [
 
           {/* CTA Buttons */}
           <div className="hidden md:flex items-center gap-3">
-            <Link to={patientUser ? "/patient/mypage" : "/patient/login"}>
-              <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5 hover:text-primary hover:border-primary/50 transition-all">
-                <User className="w-4 h-4" />
-                <span>{patientUser ? "마이페이지" : "로그인"}</span>
-              </Button>
-            </Link>
-            <Link to="/patient/login">
-              <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-md hover:shadow-lg transition-all">
-                <Calendar className="w-4 h-4" />
-                <span>진료예약</span>
-              </Button>
-            </Link>
+            {patientUser ? (
+              <>
+                <Link to="/patient/mypage">
+                  <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5 hover:text-primary hover:border-primary/50 transition-all">
+                    <User className="w-4 h-4" />
+                    <span>마이페이지</span>
+                  </Button>
+                </Link>
+                <Link to="/patient/doctors">
+                  <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-md hover:shadow-lg transition-all">
+                    <Calendar className="w-4 h-4" />
+                    <span>진료예약</span>
+                  </Button>
+                </Link>
+                <Button 
+                  variant="outline" 
+                  className="gap-2 border-red-200 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all"
+                  onClick={() => {
+                    setPatientUser(null);
+                    navigate("/", { replace: true });
+                  }}
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>로그아웃</span>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Link to="/patient/login">
+                  <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5 hover:text-primary hover:border-primary/50 transition-all">
+                    <User className="w-4 h-4" />
+                    <span>로그인</span>
+                  </Button>
+                </Link>
+                <Link to="/patient/login">
+                  <Button className="gap-2 bg-gradient-to-r from-primary to-accent hover:opacity-90 shadow-md hover:shadow-lg transition-all">
+                    <Calendar className="w-4 h-4" />
+                    <span>진료예약</span>
+                  </Button>
+                </Link>
+              </>
+            )}
           </div>
 
           {/* Mobile Menu Toggle */}
@@ -123,18 +156,49 @@ const navItems = [
               </Link>
             ))}
             <div className="flex flex-col gap-3 mt-4">
-              <Link to={patientUser ? "/patient/mypage" : "/patient/login"}>
-                <Button variant="outline" className="w-full justify-center gap-2">
-                  <User className="w-4 h-4" />
-                  {patientUser ? "마이페이지" : "로그인"}
-                </Button>
-              </Link>
-              <Link to="/patient/login">
-                <Button className="w-full justify-center gap-2 bg-gradient-to-r from-primary to-accent">
-                  <Calendar className="w-4 h-4" />
-                  진료예약
-                </Button>
-              </Link>
+              {patientUser ? (
+                <>
+                  <Link to="/patient/mypage">
+                    <Button variant="outline" className="w-full justify-center gap-2">
+                      <User className="w-4 h-4" />
+                      마이페이지
+                    </Button>
+                  </Link>
+                  <Link to="/patient/doctors">
+                    <Button className="w-full justify-center gap-2 bg-gradient-to-r from-primary to-accent">
+                      <Calendar className="w-4 h-4" />
+                      진료예약
+                    </Button>
+                  </Link>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-center gap-2 border-red-200 hover:bg-red-50 hover:text-red-600 hover:border-red-300"
+                    onClick={() => {
+                      setPatientUser(null);
+                      setIsMobileMenuOpen(false);
+                      navigate("/", { replace: true });
+                    }}
+                  >
+                    <LogOut className="w-4 h-4" />
+                    로그아웃
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Link to="/patient/login">
+                    <Button variant="outline" className="w-full justify-center gap-2">
+                      <User className="w-4 h-4" />
+                      로그인
+                    </Button>
+                  </Link>
+                  <Link to="/patient/login">
+                    <Button className="w-full justify-center gap-2 bg-gradient-to-r from-primary to-accent">
+                      <Calendar className="w-4 h-4" />
+                      진료예약
+                    </Button>
+                  </Link>
+                </>
+              )}
             </div>
           </nav>
         </div>
@@ -169,7 +233,7 @@ const navItems = [
                 당신의 건강한 삶을 위한 가장 정확한 답을 제시합니다.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
-                <Link to="/patient/login">
+                <Link to={patientUser ? "/patient/doctors" : "/patient/login"}>
                   <Button size="lg" className="h-14 px-8 text-lg bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 rounded-full">
                     진료 예약하기 <ArrowRight className="ml-2 w-5 h-5" />
                   </Button>
@@ -184,22 +248,7 @@ const navItems = [
           </div>
 
           {/* Floating Stats Card */}
-          <div className="absolute bottom-10 right-10 hidden lg:block animate-in slide-in-from-bottom-10 duration-1000 delay-300 fade-in">
-            <div className="glass-panel p-6 rounded-2xl max-w-xs backdrop-blur-md bg-white/90 dark:bg-black/60 shadow-xl border border-white/20">
-              <div className="flex items-center gap-4 mb-4">
-                <div className="w-12 h-12 rounded-full bg-accent/10 flex items-center justify-center text-accent">
-                  <Brain className="w-6 h-6" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground font-medium">AI 진단 정확도</p>
-                  <p className="text-2xl font-bold text-foreground">99.8%</p>
-                </div>
-              </div>
-              <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-accent w-[99.8%]"></div>
-              </div>
-            </div>
-          </div>
+          <PatientChatbotWidget />
         </section>
 
         {/* Quick Access Menu */}
@@ -207,10 +256,10 @@ const navItems = [
           <div className="container">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {[
-                { icon: CalendarCheck, title: "간편 예약", desc: "모바일로 쉽고 빠르게", link: "/patient/login" },
+                { icon: CalendarCheck, title: "간편 예약", desc: "모바일로 쉽고 빠르게", link: patientUser ? "/patient/doctors" : "/patient/login" },
                 { icon: Search, title: "진료과 찾기", desc: "증상별 맞춤 진료과", link: "/patient/doctors" },
                 { icon: FileText, title: "제증명 발급", desc: "온라인 즉시 발급", link: patientUser ? "/patient/records" : "/patient/login" },
-                { icon: Stethoscope, title: "건강검진", desc: "나만을 위한 맞춤 검진", link: "/patient/login" }
+                { icon: Stethoscope, title: "건강검진", desc: "여성 건강 통계·검진 정보", link: "/breast-cancer-stats" }
               ].map((item, idx) => (
                 <Link key={idx} to={item.link}>
                   <Card className="border-none shadow-xl hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 bg-white dark:bg-slate-800 overflow-hidden group cursor-pointer">
@@ -271,7 +320,7 @@ const navItems = [
                 <div className="space-y-6">
                   {[
                     { title: "실시간 데이터 분석", desc: "환자의 생체 신호를 실시간으로 모니터링하고 이상 징후를 즉시 감지합니다." },
-                    { title: "정밀 영상 판독", desc: "MRI, CT 등 의료 영상을 AI가 픽셀 단위로 분석하여 미세한 병변까지 찾아냅니다." },
+                    { title: "정밀 영상 판독", desc: "유방촬영술, 병리, MRI 등 의료 영상을 AI가 픽셀 단위로 분석하여 미세한 병변까지 찾아냅니다." },
                     { title: "맞춤형 치료 제안", desc: "유전체 정보와 생활 습관을 분석하여 개인별 최적의 치료법을 제시합니다." }
                   ].map((feature, idx) => (
                     <div key={idx} className="flex gap-4 p-4 rounded-xl hover:bg-white hover:shadow-md transition-all duration-300 border border-transparent hover:border-slate-100 dark:hover:border-slate-800">
@@ -290,52 +339,6 @@ const navItems = [
           </div>
         </section>
 
-        {/* Medical Staff Section */}
-        <section className="py-24 bg-white dark:bg-black">
-          <div className="container">
-            <div className="text-center max-w-3xl mx-auto mb-16">
-              <h2 className="text-4xl font-bold mb-4 text-foreground">최고의 의료진</h2>
-              <p className="text-lg text-muted-foreground">
-                각 분야 최고의 전문의들이 첨단 시스템과 함께 당신의 건강을 지킵니다.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {[
-                { name: "김태훈 교수", dept: "순환기내과", img: "/images/doctor-1.jpg", desc: "심장질환 AI 진단 권위자" },
-                { name: "이서연 교수", dept: "신경외과", img: "/images/doctor-2.jpg", desc: "뇌혈관 정밀 수술 전문" },
-                { name: "박준형 교수", dept: "정형외과", img: "/images/doctor-1.jpg", desc: "로봇 인공관절 수술 전문" },
-                { name: "최지민 교수", dept: "소아청소년과", img: "/images/doctor-2.jpg", desc: "소아 희귀질환 전문" }
-              ].map((doctor, idx) => (
-                <div key={idx} className="group relative overflow-hidden rounded-2xl bg-slate-50 dark:bg-slate-900">
-                  <div className="aspect-[4/5] overflow-hidden">
-                    <img 
-                      src={doctor.img} 
-                      alt={doctor.name} 
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-6 text-white transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">
-                    <p className="text-accent font-medium text-sm mb-1">{doctor.dept}</p>
-                    <h3 className="text-2xl font-bold mb-2">{doctor.name}</h3>
-                    <p className="text-white/80 text-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
-                      {doctor.desc}
-                    </p>
-                  </div>
-                  </div>
-                ))}
-            </div>
-            
-            <div className="text-center mt-12">
-              <Link to="/patient/doctors">
-                <Button variant="outline" size="lg" className="rounded-full px-8 border-primary text-primary hover:bg-primary hover:text-white">
-                  의료진 전체보기
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </section>
 
         {/* CDSS Platform Access Banner */}
         <section className="py-20 relative overflow-hidden">

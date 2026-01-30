@@ -27,6 +27,7 @@ ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0', '192.168.41.140', '34.42.2
 
 # Application definition
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -45,6 +46,9 @@ INSTALLED_APPS = [
     'mri_viewer',
     'ocs',
     'chatbot',
+    'lis',
+    'channels',
+    'chat',
 ]
 
 MIDDLEWARE = [
@@ -77,6 +81,24 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'eventeye.wsgi.application'
+ASGI_APPLICATION = 'eventeye.asgi.application'
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
+
+# Chat 설정
+OPEN_CHAT_ACCESS = True  # 모든 사용자가 채팅방 접근 가능
+MESSAGE_HISTORY_LIMIT = 50  # WebSocket 연결 시 로드할 최근 메시지 수
+
+# Chat 설정
+OPEN_CHAT_ACCESS = True  # 모든 사용자가 채팅방 접근 가능
+MESSAGE_HISTORY_LIMIT = 50  # WebSocket 연결 시 로드할 최근 메시지 수
 
 # Database
 DATABASES = {
@@ -140,7 +162,10 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5000",
     "http://localhost:5001",
     "http://127.0.0.1:5001",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
     "http://34.42.223.43",
+    "http://34.42.223.43:80",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
@@ -161,6 +186,8 @@ CSRF_TRUSTED_ORIGINS = [
 
 SESSION_COOKIE_SAMESITE = 'Lax'
 SESSION_COOKIE_SECURE = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_AGE = 86400  # 24시간
 
 # REST Framework settings
 REST_FRAMEWORK = {
@@ -172,7 +199,19 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',  # 채팅 API 인증을 위해 필요
+    ],
+    # CSRF 면제를 위한 설정 (연구실 컴퓨터 워커용 API)
+    'EXEMPT_VIEWS': [
+        'mri_viewer.segmentation_views.segment_series',
+        'mri_viewer.segmentation_views.request_local_inference',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'chat_messages': '1000/hour',  # 메시지 조회 throttle
+        'chat_search': '100/hour',     # 메시지 검색 throttle
+        'chat_upload': '50/hour',      # 파일 업로드 throttle
+    },
 }
 
 # Swagger settings
@@ -209,4 +248,5 @@ FLUTTER_GITHUB_REPO = 'nogeonu/flutter-mobile'  # GitHub 저장소 (owner/repo)
 # File upload size limits (for NIfTI and DICOM files)
 DATA_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 500 * 1024 * 1024  # 500 MB
-DATA_UPLOAD_MAX_NUMBER_FIELDS = 10000
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 100000  # DICOM 파일 업로드를 위해 증가 (seq_0~seq_3 폴더, 각 134장씩 총 536장)
+DATA_UPLOAD_MAX_NUMBER_FILES = 1000  # 동시 업로드 가능한 파일 수 제한 (seq_0~seq_3 폴더, 각 134장씩 총 536장)

@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CDSS 최종 발표 PPT 구성안</title>
+    <style>
+        @page {
+            margin: 2cm;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+            line-height: 1.8;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 40px;
+            color: #333;
+            background: white;
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #3498db;
+            padding-bottom: 15px;
+            margin-top: 0;
+            font-size: 2.5em;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 40px;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+            font-size: 2em;
+            page-break-after: avoid;
+        }
+        h3 {
+            color: #7f8c8d;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+            page-break-after: avoid;
+        }
+        p {
+            margin: 10px 0;
+        }
+        code {
+            background-color: #f4f4f4;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-family: 'Courier New', 'Monaco', monospace;
+            font-size: 0.9em;
+            color: #e74c3c;
+        }
+        pre {
+            background-color: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-family: 'Courier New', 'Monaco', monospace;
+            font-size: 0.9em;
+            line-height: 1.5;
+            page-break-inside: avoid;
+        }
+        pre code {
+            background-color: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        ul {
+            margin-left: 30px;
+            margin-top: 10px;
+            margin-bottom: 10px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        strong {
+            color: #2c3e50;
+            font-weight: 600;
+        }
+        em {
+            color: #7f8c8d;
+            font-style: italic;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        hr {
+            border: none;
+            border-top: 2px solid #ecf0f1;
+            margin: 30px 0;
+        }
+        @media print {
+            body {
+                max-width: 100%;
+                padding: 20px;
+            }
+            h1, h2, h3 {
+                page-break-after: avoid;
+            }
+            pre {
+                page-break-inside: avoid;
+            }
+        }
+    </style>
+</head>
+<body>
+<p><h1>CDSS (Clinical Decision Support System) 최종 발표 PPT 구성안</h1>
+<h2>차세대 지능형 의료지원 시스템 구축 프로젝트</h2>
+<h3>부트캠프 최종 프로젝트 발표용</h3></p><p><strong>총 슬라이드 수</strong>: 42장  
+<strong>발표 시간</strong>: 약 20-25분  
+<strong>대상</strong>: 부트캠프 수료식, 채용 담당자, 기술 리뷰어, 의료진, 프로젝트 관계자</p><p><strong>프로젝트 기간</strong>: 약 5-6주  
+<strong>팀 구성</strong>: [팀원 정보]  
+<strong>기술 스택</strong>: Django, React, PyTorch, GCP, MSA 아키텍처</p><p>---</p><p><h2>📋 목차</h2></p><p><h3>Part 1: 프로젝트 개요 (슬라이드 1-5)</h3>
+<h3>Part 2: 시스템 아키텍처 (슬라이드 6-13)</h3>
+<h3>Part 3: 환자 여정 (슬라이드 14-19)</h3>
+<h3>Part 4: 의료진 워크플로우 (슬라이드 20-26)</h3>
+<h3>Part 5: AI 분석 시스템 (슬라이드 27-34)</h3>
+<h3>Part 6: 핵심 시스템 (OCS/RIS/LIS) (슬라이드 35-39)</h3>
+<h3>Part 7: 성과 및 향후 계획 (슬라이드 40-42)</h3></p><p>---</p><p><h2>📑 슬라이드별 상세 내용</h2></p><p><h3>슬라이드 1: 표지</h3>
+<strong>제목</strong>: CDSS (Clinical Decision Support System)  
+<strong>부제</strong>: 차세대 지능형 의료지원 시스템 구축 프로젝트  
+<strong>부트캠프 최종 프로젝트</strong></p><p><strong>내용</strong>:
+<ul>
+<li><strong>프로젝트명</strong>: CDSS - Clinical Decision Support System</li>
+<li><strong>목적</strong>: AI 기반 의료진 의사결정 지원 및 통합 의료 정보 시스템 구축</li>
+<li><strong>프로젝트 기간</strong>: 약 5-6주</li>
+<li><strong>기술 스택</strong>: Django, React, PyTorch, GCP, MSA Architecture</li>
+<li><strong>팀 구성</strong>: [팀원 정보]</li>
+<li><strong>발표자</strong>: [발표자 정보]</li>
+<li><strong>발표 일자</strong>: [발표 일자]</li>
+</ul></p><p><strong>프로젝트 하이라이트</strong> (표지에 간략히 표시):
+<ul>
+<li>🎯 12개 독립 서비스 (MSA 아키텍처)</li>
+<li>🎯 5가지 AI 분석 모델</li>
+<li>🎯 6가지 사용자 역할</li>
+<li>🎯 GCP 프로덕션 배포</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>프로젝트 로고</li>
+<li>시스템 아키텍처 아이콘</li>
+<li>AI/의료 이미지 일러스트</li>
+<li>부트캠프 로고 (선택사항)</li>
+</ul></p><p>---</p><p><h3>슬라이드 2: 목차</h3>
+<strong>제목</strong>: 발표 구성</p><p><strong>내용</strong>:
+1. <strong>프로젝트 개요 및 배경</strong> (3분)
+<ul>
+<li>프로젝트 소개</li>
+<li>문제 정의 및 해결 방안</li>
+<li>시스템 범위</li>
+</ul></p><p>2. <strong>시스템 아키텍처</strong> (4분)
+<ul>
+<li>전체 아키텍처</li>
+<li>기술 스택</li>
+<li>포트 사용 현황</li>
+<li>보안 및 규정 준수</li>
+</ul></p><p>3. <strong>환자 여정</strong> (3분)
+<ul>
+<li>로그인 → 예약 → 검사 → 결과 확인</li>
+<li>Flutter 모바일 앱</li>
+</ul></p><p>4. <strong>의료진 워크플로우</strong> (3분)
+<ul>
+<li>역할별 업무 프로세스</li>
+<li>통합 대시보드</li>
+</ul></p><p>5. <strong>AI 분석 시스템</strong> (6분) ⭐ <strong>핵심</strong>
+<ul>
+<li>5가지 AI 모델 상세 설명</li>
+<li>맘모그래피, 병리, MRI, 폐암/pCR, 피부암</li>
+<li>AI 서비스 아키텍처</li>
+</ul></p><p>6. <strong>핵심 시스템</strong> (3분)
+<ul>
+<li>OCS (처방전달시스템)</li>
+<li>RIS (영상정보시스템)</li>
+<li>LIS (검사정보시스템)</li>
+<li>시스템 통합</li>
+</ul></p><p>7. <strong>성과 및 향후 계획</strong> (3분)
+<ul>
+<li>프로젝트 성과</li>
+<li>기술적 성과 및 도전 과제 해결</li>
+<li>향후 계획</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>목차 트리 구조</li>
+<li>각 파트별 예상 시간 표시</li>
+<li>핵심 파트 강조 (AI 분석 시스템)</li>
+</ul></p><p>---</p><p><h3>슬라이드 3: 프로젝트 개요</h3>
+<strong>제목</strong>: 프로젝트 개요</p><p><strong>프로젝트 정보</strong>:
+<ul>
+<li><strong>프로젝트명</strong>: CDSS (Clinical Decision Support System)</li>
+<li><strong>아키텍처</strong>: MSA (Microservices Architecture) 기반</li>
+<li><strong>개발 기간</strong>: 약 5-6주</li>
+<li><strong>배포 환경</strong>: GCP (Google Cloud Platform)</li>
+<li><strong>서비스 규모</strong>: 12개 독립 서비스, 6가지 사용자 역할, 5가지 AI 모델</li>
+</ul></p><p><strong>프로젝트 목적</strong>: 
+<ul>
+<li>의료진의 정확하고 신속한 진단 지원 (AI 기반)</li>
+<li>환자 치료의 질과 안전성 향상</li>
+<li>의료 생태계 내 협업 촉진 (실시간 통신)</li>
+<li>의료 서비스 효율성 향상 (자동화, 통합 관리)</li>
+</ul></p><p><strong>핵심 특징</strong>:
+<ul>
+<li>✅ <strong>멀티모달 AI 분석</strong>: 5가지 AI 모델 (맘모그래피, 병리, MRI, 폐암/pCR, 피부암)</li>
+<li>✅ <strong>역할별 맞춤형 인터페이스</strong>: 6가지 역할 (의사, 원무과, 환자, 방사선과, 영상의학과, 검사실)</li>
+<li>✅ <strong>통합 의료 정보 시스템</strong>: OCS, RIS, LIS, PACS 완전 통합</li>
+<li>✅ <strong>실시간 데이터 동기화</strong>: WebSocket 기반 실시간 알림 및 채팅</li>
+<li>✅ <strong>마이크로서비스 아키텍처</strong>: 확장 가능하고 유지보수 용이한 구조</li>
+<li>✅ <strong>클라우드 네이티브</strong>: GCP 기반 안정적인 운영 환경</li>
+</ul></p><p><strong>프로젝트 하이라이트</strong> (발표 시 강조):
+<ul>
+<li>🎯 <strong>실제 의료 환경을 고려한 설계</strong>: DICOM 표준, PACS 통합, 의료진 워크플로우 반영</li>
+<li>🎯 <strong>프로덕션 수준의 인프라</strong>: GCP 배포, Nginx 리버스 프록시, Docker 컨테이너화</li>
+<li>🎯 <strong>고성능 AI 서빙</strong>: Mosec 프레임워크 활용, 비동기 처리, 배치 최적화</li>
+<li>🎯 <strong>엔터프라이즈급 보안</strong>: RBAC, CSRF 보호, 데이터 암호화, 세션 관리</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>프로젝트 로고</li>
+<li>핵심 특징 아이콘</li>
+<li>프로젝트 규모 인포그래픽</li>
+</ul></p><p>---</p><p><h3>슬라이드 4: 프로젝트 배경 및 문제 정의</h3>
+<strong>제목</strong>: 왜 CDSS가 필요한가? - 실제 의료 현장의 문제점</p><p><strong>현재 의료 시스템의 문제점</strong> (실제 병원 환경 기반):
+<ul>
+<li>❌ <strong>의료진 업무 과부하</strong>:</li>
+<li>진단 시간 부족 (환자 1명당 평균 5-10분)</li>
+<li>업무 효율성 저하 (시스템 간 전환 시간 낭비)</li>
+<li>판독서 작성 시간 증가</li>
+</ul>
+  
+<ul>
+<li>❌ <strong>데이터 분산 관리</strong>:</li>
+<li>EMR, OCS, RIS, LIS, PACS 시스템 간 연동 부족</li>
+<li>수동 데이터 입력 및 전달 과정</li>
+<li>정보 불일치 및 오류 발생 가능성</li>
+</ul>
+  
+<ul>
+<li>❌ <strong>주관적 진단</strong>:</li>
+<li>의료진 경험에 의존한 진단</li>
+<li>진단 일관성 부족 (의료진별 차이)</li>
+<li>초보 의료진의 진단 정확도 저하</li>
+</ul>
+  
+<ul>
+<li>❌ <strong>조기 진단의 어려움</strong>:</li>
+<li>환자 접근성 제한 (병원 방문 필요)</li>
+<li>스크리닝 기회 부족</li>
+<li>비용 부담으로 인한 검진 기피</li>
+</ul></p><p><strong>우리 프로젝트의 해결 방안</strong> (기술적 접근):
+<ul>
+<li>✅ <strong>AI 기반 진단 지원</strong>:</li>
+<li>멀티모달 AI 분석 (5가지 모델)으로 정확도 향상</li>
+<li>객관적 진단 기준 제공</li>
+<li>판독 시간 단축 (AI 분석 결과 즉시 확인)</li>
+</ul>
+  
+<ul>
+<li>✅ <strong>통합 의료 정보 시스템</strong>:</li>
+<li>EMR, OCS, RIS, LIS, PACS 완전 통합</li>
+<li>자동 데이터 동기화</li>
+<li>단일 인터페이스에서 모든 정보 접근</li>
+</ul>
+  
+<ul>
+<li>✅ <strong>실시간 협업 시스템</strong>:</li>
+<li>WebSocket 기반 실시간 알림</li>
+<li>의료진 간 실시간 채팅</li>
+<li>주문 상태 실시간 추적</li>
+</ul>
+  
+<ul>
+<li>✅ <strong>역할별 맞춤형 인터페이스</strong>:</li>
+<li>6가지 역할별 최적화된 시스템</li>
+<li>불필요한 정보 필터링</li>
+<li>업무 효율성 극대화</li>
+</ul></p><p><strong>기대 효과</strong> (정량적):
+<ul>
+<li>📊 <strong>진단 시간 단축</strong>: AI 분석 결과 즉시 확인으로 판독 시간 30-40% 단축 예상</li>
+<li>📊 <strong>업무 효율성 향상</strong>: 통합 시스템으로 시스템 전환 시간 80% 감소</li>
+<li>📊 <strong>진단 정확도 향상</strong>: AI 지원으로 초보 의료진도 경험 있는 의료진 수준의 정확도 달성</li>
+<li>📊 <strong>환자 만족도 향상</strong>: 빠른 결과 확인 및 투명한 정보 제공</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>문제점 vs 해결 방안 비교표</li>
+<li>Before/After 다이어그램</li>
+<li>기대 효과 수치 그래프</li>
+</ul></p><p>---</p><p><h3>슬라이드 5: 시스템 범위</h3>
+<strong>제목</strong>: 시스템 범위</p><p><strong>두 가지 플랫폼</strong>:</p><p>1. <strong>병원 홈페이지 (Public) - 환자 전용</strong>
+<ul>
+<li>환자 회원가입/로그인</li>
+<li>본인 정보 조회</li>
+<li>진료 기록 조회</li>
+<li>의료 이미지 조회</li>
+<li>예약 관리</li>
+<li>Flutter 모바일 앱 (피부암 1차 스크리닝)</li>
+</ul></p><p>2. <strong>의료진 플랫폼 (CDSS) - 의료진 전용</strong>
+<ul>
+<li>의사 인터페이스 (외과, 호흡기내과 등)</li>
+<li>원무과 인터페이스</li>
+<li>방사선과 인터페이스</li>
+<li>영상의학과 인터페이스</li>
+<li>검사실 인터페이스</li>
+</ul></p><p><strong>6가지 사용자 역할</strong>:
+<ul>
+<li>의사 (외과, 호흡기내과 등), 원무과, 환자, 방사선과, 영상의학과, 검사실</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>플랫폼 구조도</li>
+<li>역할별 아이콘</li>
+</ul></p><p>---</p><p><h2>Part 2: 시스템 아키텍처</h2></p><p><h3>슬라이드 6: 전체 시스템 아키텍처 개요</h3>
+<strong>제목</strong>: 전체 시스템 아키텍처</p><p><strong>인프라 구성</strong>:
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│                    GCP Cloud Platform                    │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  Django API  │  │  React App  │  │   Orthanc   │  │
+│  │   (Daphne)   │  │   (Nginx)   │  │   (Docker)   │  │
+│  │   Port 8000  │  │   Port 80   │  │ Port 8042/4242│ │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│         │                  │                  │          │
+│         └──────────────────┴──────────────────┘          │
+│                    ┌───────────┐                         │
+│                    │  MySQL    │                         │
+│                    │ Database  │                         │
+│                    │ Port 3306 │                         │
+│                    └───────────┘                         │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │  Mosec AI    │  │  Mosec AI    │  │ 교육원 PC    │  │
+│  │  (MRI)       │  │  (맘모그래피)│  │  (병리 워커) │  │
+│  │  Port 5006   │  │  Port 5007   │  │  HTTP API    │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  │
+│  │ 챗봇 서버    │  │  FastAPI     │  │ Flask ML     │  │
+│  │ Port 8001    │  │  (Uvicorn)   │  │  Service     │  │
+│  │              │  │  Port 8002   │  │  Port 5002   │  │
+│  │ (피부암)     │  │  (약물검색)  │  │  (폐암/pCR)  │  │
+│  └──────────────┘  └──────────────┘  └──────────────┘  │
+│                                                          │
+│                    ┌───────────┐                         │
+│                    │  Redis   │                         │
+│                    │ Port 6379│                         │
+│                    └───────────┘                         │
+└─────────────────────────────────────────────────────────┘</code></pre></p><p><strong>주요 구성 요소</strong>:
+<ul>
+<li><strong>프론트엔드</strong>: React (TypeScript), Nginx (포트 80)</li>
+<li><strong>백엔드</strong>: Django REST Framework, Daphne (ASGI 서버, 포트 8000)</li>
+<li><strong>데이터베이스</strong>: MySQL (포트 3306), Redis (포트 6379)</li>
+<li><strong>PACS</strong>: Orthanc (DICOM 서버, 포트 8042/4242)</li>
+<li><strong>AI 서비스</strong>:</li>
+<li>Mosec (2개 서비스: MRI 5006, 맘모그래피 5007)</li>
+<li>교육원 PC 워커 (병리 이미지 분석, HTTP API)</li>
+<li>Flask ML Service (폐암/pCR 예측, 포트 5002)</li>
+<li><strong>추가 서비스</strong>:</li>
+<li>챗봇 서버 (포트 8001) - Flutter 앱용 챗봇 + 피부암 분석</li>
+<li>FastAPI (Uvicorn, 포트 8002) - 약물 검색 및 상호작용 검사</li>
+<li><strong>클라우드</strong>: GCP (Google Cloud Platform)</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>시스템 아키텍처 다이어그램</li>
+<li>구성 요소 설명</li>
+</ul></p><p>---</p><p><h3>슬라이드 7: 기술 스택</h3>
+<strong>제목</strong>: 기술 스택</p><p><strong>프론트엔드</strong>:
+<ul>
+<li>React 18 + TypeScript</li>
+<li>Tailwind CSS</li>
+<li>Shadcn/ui</li>
+<li>React Router</li>
+<li>Axios</li>
+</ul></p><p><strong>백엔드</strong>:
+<ul>
+<li>Django 4.x</li>
+<li>Django REST Framework</li>
+<li>Daphne (ASGI 서버, WebSocket 지원)</li>
+<li>MySQL</li>
+</ul></p><p><strong>AI/ML</strong>:
+<ul>
+<li>PyTorch</li>
+<li>MonAI (Medical Imaging)</li>
+<li>Mosec (Model Serving)</li>
+<li>CLAM, nnUNet, H-optimus-0 (병리 이미지 분석)</li>
+<li>SwinUNETR (MRI 세그멘테이션)</li>
+<li>ResNet50 (맘모그래피 분류)</li>
+</ul></p><p><strong>인프라</strong>:
+<ul>
+<li>GCP (Google Cloud Platform)</li>
+<li>Nginx (Reverse Proxy)</li>
+<li>Docker (Orthanc)</li>
+<li>Orthanc (PACS 서버)</li>
+</ul></p><p><strong>모바일</strong>:
+<ul>
+<li>Flutter (환자 앱)</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>기술 스택 로고</li>
+<li>카테고리별 분류</li>
+</ul></p><p>---</p><p><h3>슬라이드 8: 데이터베이스 설계</h3>
+<strong>제목</strong>: 데이터베이스 설계</p><p><strong>주요 테이블</strong>:
+1. <strong>환자 관리</strong>
+<ul>
+<li><code>PatientUser</code>: 환자 계정 정보</li>
+<li><code>Patient</code>: 환자 기본 정보</li>
+<li><code>Appointment</code>: 예약 정보</li>
+</ul></p><p>2. <strong>의료진 관리</strong>
+<ul>
+<li><code>User</code>: 의료진 계정 (Django 기본)</li>
+<li><code>Doctor</code>: 의사 정보</li>
+<li><code>Department</code>: 진료과 정보</li>
+</ul></p><p>3. <strong>OCS (처방전달시스템)</strong>
+<ul>
+<li><code>Order</code>: 주문 정보 (처방/검사/영상)</li>
+<li><code>OrderItem</code>: 주문 항목 상세</li>
+<li><code>DrugInteraction</code>: 약물 상호작용 정보</li>
+</ul></p><p>4. <strong>의료 이미지</strong>
+<ul>
+<li><code>MedicalImage</code>: 의료 이미지 메타데이터</li>
+<li><code>ImageAnalysis</code>: AI 분석 결과</li>
+</ul></p><p>5. <strong>진료 기록</strong>
+<ul>
+<li><code>MedicalRecord</code>: 진료 기록</li>
+<li><code>Prescription</code>: 처방전</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>ERD 다이어그램 (주요 테이블)</li>
+<li>테이블 관계도</li>
+</ul></p><p>---</p><p><h3>슬라이드 9: 사용자 인증 및 권한 관리</h3>
+<strong>제목</strong>: 사용자 인증 및 권한 관리</p><p><strong>인증 시스템</strong>:
+<ul>
+<li><strong>의료진</strong>: Django Session Authentication</li>
+<li><strong>환자</strong>: 별도 PatientUser 모델 (JWT 또는 Session)</li>
+</ul></p><p><strong>역할 기반 접근 제어 (RBAC)</strong>:
+<ul>
+<li>6가지 역할: 의사 (외과, 호흡기내과 등), 원무과, 환자, 방사선과, 영상의학과, 검사실</li>
+<li>역할별 라우팅 가드</li>
+<li>역할별 데이터 접근 권한</li>
+</ul></p><p><strong>보안 기능</strong>:
+<ul>
+<li>비밀번호 해싱 (bcrypt)</li>
+<li>CSRF 보호</li>
+<li>세션 관리</li>
+<li>API 인증</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>인증 흐름도</li>
+<li>역할별 권한 매트릭스</li>
+</ul></p><p>---</p><p><h3>슬라이드 10: API 아키텍처</h3>
+<strong>제목</strong>: RESTful API 아키텍처</p><p><strong>API 구조</strong>:
+<pre><code>/api/
+├── auth/              # 인증
+├── patients/          # 환자 관리
+├── appointments/      # 예약 관리
+├── ocs/               # 처방전달시스템
+│   ├── orders/        # 주문 관리
+│   └── notifications/ # 알림
+├── mri/               # 의료 이미지
+│   ├── images/        # 이미지 조회
+│   ├── mammography/   # 맘모그래피 분석
+│   ├── pathology/     # 병리 이미지 분석
+│   └── segmentation/  # MRI 세그멘테이션
+└── notifications/     # 실시간 알림</code></pre></p><p><strong>API 특징</strong>:
+<ul>
+<li>RESTful 설계 원칙 준수</li>
+<li>JSON 응답 형식</li>
+<li>에러 핸들링 표준화</li>
+<li>API 버전 관리</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>API 엔드포인트 트리</li>
+<li>API 호출 예시</li>
+</ul></p><p>---</p><p><h3>슬라이드 11: 실시간 통신</h3>
+<strong>제목</strong>: 실시간 통신 시스템</p><p><strong>알림 시스템</strong>:
+<ul>
+<li><strong>WebSocket</strong>: 실시간 상태 업데이트</li>
+<li><strong>Server-Sent Events (SSE)</strong>: 단방향 실시간 스트리밍</li>
+<li><strong>폴링 (Polling)</strong>: 주기적 상태 확인</li>
+</ul></p><p><strong>알림 유형</strong>:
+<ul>
+<li>주문 상태 변경 (OCS)</li>
+<li>영상 업로드 완료</li>
+<li>AI 분석 완료</li>
+<li>예약 알림</li>
+<li>처방전 준비 완료</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>실시간 통신 아키텍처</li>
+<li>알림 흐름도</li>
+</ul></p><p>---</p><p><h3>슬라이드 12: 포트 사용 현황</h3>
+<strong>제목</strong>: 포트 사용 현황</p><p><strong>웹 서버 및 애플리케이션</strong>:
+| 포트 | 서비스 | 설명 |
+|------|--------|------|
+| 80 | Nginx | 웹 서버 (프론트엔드 + API 프록시) |
+| 8000 | Django (Daphne) | 메인 백엔드 API + WebSocket 채팅 |
+| 8001 | 챗봇 서버 | Flutter 프로젝트 챗봇 + 피부암 딥러닝 분석 |
+| 8002 | FastAPI (Uvicorn) | 약물 검색 및 상호작용 검사 |</p><p><strong>AI 추론 서비스</strong>:
+| 포트/위치 | 서비스 | 설명 |
+|------|--------|------|
+| 5002 | Flask ML Service | 폐암 ML 서비스 + pCR 예측 (유전자 예측) |
+| 5006 | Mosec | MRI 세그멘테이션 |
+| 5007 | Mosec | 맘모그래피 분석 |
+| 교육원 PC | HTTP API 워커 | 병리 이미지 분석 (CLAM, nnUNet, H-optimus-0, 로컬 wsi 폴더 사용) |</p><p><strong>데이터베이스 및 캐시</strong>:
+| 포트 | 서비스 | 설명 |
+|------|--------|------|
+| 3306 | MySQL | 메인 데이터베이스 (hospital_db) |
+| 6379 | Redis | 캐시 및 채팅 세션 관리 |</p><p><strong>의료 영상 서버 (PACS)</strong>:
+| 포트 | 서비스 | 설명 |
+|------|--------|------|
+| 8042 | Orthanc | DICOM 서버 (웹 UI, REST API) |
+| 4242 | Orthanc | DICOM 서버 (DICOM 프로토콜, 의료 장비 연동) |</p><p><strong>시각 자료</strong>:
+<ul>
+<li>포트 사용 현황 표</li>
+<li>서비스별 포트 매핑 다이어그램</li>
+</ul></p><p>---</p><p><h3>슬라이드 13: 보안 및 규정 준수</h3>
+<strong>제목</strong>: 보안 및 규정 준수</p><p><strong>보안 조치</strong>:
+<ul>
+<li>HTTPS (SSL/TLS)</li>
+<li>데이터 암호화 (전송 중, 저장 시)</li>
+<li>접근 로그 관리</li>
+<li>정기 보안 감사</li>
+</ul></p><p><strong>의료 데이터 규정 준수</strong>:
+<ul>
+<li>개인정보보호법 준수</li>
+<li>의료법 준수</li>
+<li>DICOM 표준 준수</li>
+<li>데이터 백업 및 복구</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>보안 레이어 다이어그램</li>
+<li>규정 준수 체크리스트</li>
+</ul></p><p>---</p><p><h2>Part 3: 환자 여정</h2></p><p><h3>슬라이드 14: 환자 여정 개요</h3>
+<strong>제목</strong>: 환자 여정 (Patient Journey)</p><p><strong>전체 프로세스</strong>:
+<pre><code>1. 환자 회원가입/로그인 (Flutter 앱 또는 웹)
+   ↓
+2. 진료 예약 신청
+   ↓
+3. 병원 방문 및 진료
+   ↓
+4. 검사 수행 (맘모그래피, 병리, MRI)
+   ↓
+5. AI 분석 및 판독
+   ↓
+6. 처방전 발급
+   ↓
+7. 결과 확인 (환자 홈페이지)</code></pre></p><p><strong>시각 자료</strong>:
+<ul>
+<li>환자 여정 플로우차트</li>
+<li>각 단계별 아이콘</li>
+</ul></p><p>---</p><p><h3>슬라이드 15: 환자 로그인 및 회원가입</h3>
+<strong>제목</strong>: 환자 로그인 및 회원가입</p><p><strong>Flutter 모바일 앱</strong>:
+<ul>
+<li>환자 회원가입</li>
+<li>로그인 (계정 ID + 비밀번호)</li>
+<li>자동 로그인 (Remember Me)</li>
+<li>비밀번호 찾기</li>
+</ul></p><p><strong>웹 홈페이지</strong>:
+<ul>
+<li>동일한 로그인 시스템</li>
+<li>반응형 디자인</li>
+</ul></p><p><strong>인증 프로세스</strong>:
+<pre><code>1. 환자 입력 (계정 ID, 비밀번호)
+   ↓
+2. Django API 호출 (/api/patients/login/)
+   ↓
+3. PatientUser 모델에서 조회
+   ↓
+4. 비밀번호 검증
+   ↓
+5. 세션 생성 및 응답 반환
+   ↓
+6. 프론트엔드에서 환자 정보 저장</code></pre></p><p><strong>시각 자료</strong>:
+<ul>
+<li>로그인 화면 스크린샷</li>
+<li>인증 흐름도</li>
+</ul></p><p>---</p><p><h3>슬라이드 16: 진료 예약 시스템</h3>
+<strong>제목</strong>: 진료 예약 시스템</p><p><strong>예약 프로세스</strong>:
+1. <strong>환자</strong>: 예약 신청
+<ul>
+<li>진료과 선택</li>
+<li>의사 선택</li>
+<li>날짜/시간 선택</li>
+<li>증상 입력</li>
+</ul></p><p>2. <strong>원무과</strong>: 예약 접수 및 확인
+<ul>
+<li>예약 승인/거부</li>
+<li>스케줄 관리</li>
+</ul></p><p>3. <strong>의사</strong>: 예약 확인
+<ul>
+<li>담당 환자 예약 조회</li>
+<li>스케줄 관리</li>
+</ul></p><p><strong>예약 유형</strong>:
+<ul>
+<li>일반 예약</li>
+<li>검진 예약</li>
+<li>회의</li>
+<li>내근/외근</li>
+</ul></p><p><strong>예약 상태</strong>:
+<ul>
+<li>예약됨 (scheduled)</li>
+<li>완료 (completed)</li>
+<li>취소 (cancelled)</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>예약 화면 스크린샷</li>
+<li>예약 프로세스 플로우차트</li>
+</ul></p><p>---</p><p><h3>슬라이드 17: 검사 프로세스 (맘모그래피, 병리, MRI)</h3>
+<strong>제목</strong>: 검사 프로세스</p><p><strong>1. 맘모그래피 (Mammography)</strong>
+<ul>
+<li><strong>목적</strong>: 유방암 조기 발견</li>
+<li><strong>프로세스</strong>:</li>
+</ul>
+  <pre><code>의사 → 맘모그래피 촬영 의뢰 (OCS)
+    ↓
+  방사선과 → 4장 촬영 (L-CC, R-CC, L-MLO, R-MLO)
+    ↓
+  방사선과 → DICOM 업로드 (Orthanc)
+    ↓
+  영상의학과 → AI 분석 실행
+    ↓
+  AI 분석 결과 (Mass, Calcification, Asymmetry, Normal)
+    ↓
+  판독서 작성</code></pre></p><p><strong>2. 병리 이미지 (Pathology)</strong>
+<ul>
+<li><strong>목적</strong>: 조직 검사, 종양 여부 판별</li>
+<li><strong>프로세스</strong>:</li>
+</ul>
+  <pre><code>의사 → 조직 검사 의뢰
+    ↓
+  병리과 → SVS 파일 업로드
+    ↓
+  SVS → DICOM 변환 (Orthanc)
+    ↓
+  영상의학과 → AI 분석 실행 (CLAM 모델)
+    ↓
+  AI 분석 결과 (Normal/Tumor)
+    ↓
+  판독서 작성</code></pre></p><p><strong>3. MRI (Magnetic Resonance Imaging)</strong>
+<ul>
+<li><strong>목적</strong>: 3D 영상 분석, 종양 세그멘테이션</li>
+<li><strong>프로세스</strong>:</li>
+</ul>
+  <pre><code>의사 → MRI 촬영 의뢰
+    ↓
+  방사선과 → 4-ch DCE-MRI 촬영
+    ↓
+  방사선과 → DICOM 업로드 (Orthanc)
+    ↓
+  영상의학과 → AI 세그멘테이션 실행 (SwinUNETR)
+    ↓
+  세그멘테이션 결과 (DICOM SEG)
+    ↓
+  판독서 작성</code></pre></p><p><strong>시각 자료</strong>:
+<ul>
+<li>각 검사 프로세스 플로우차트</li>
+<li>검사 이미지 예시</li>
+</ul></p><p>---</p><p><h3>슬라이드 18: AI 분석 결과 확인</h3>
+<strong>제목</strong>: AI 분석 결과 확인</p><p><strong>환자 홈페이지에서 확인 가능한 정보</strong>:
+<ul>
+<li>본인 의료 이미지 조회</li>
+<li>AI 분석 결과 확인</li>
+<li>판독서 조회</li>
+<li>3D 시각화 (MRI 세그멘테이션)</li>
+</ul></p><p><strong>결과 표시 형식</strong>:
+<ul>
+<li><strong>맘모그래피</strong>: 4장별 분류 결과 (Mass, Calcification, Asymmetry, Normal)</li>
+<li><strong>병리</strong>: Normal/Tumor 분류, 신뢰도, 주요 관심 영역</li>
+<li><strong>MRI</strong>: 세그멘테이션 오버레이, 종양 비율</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>결과 화면 스크린샷</li>
+<li>AI 분석 결과 예시</li>
+</ul></p><p>---</p><p><h3>슬라이드 19: 처방전 확인 및 다운로드</h3>
+<strong>제목</strong>: 처방전 확인 및 다운로드</p><p><strong>처방전 프로세스</strong>:
+<pre><code>의사 → 처방전 발급 (OCS)
+  ↓
+약물 상호작용 체크
+  ↓
+알레르기 체크
+  ↓
+약국으로 전달
+  ↓
+조제 완료
+  ↓
+환자 → 처방전 확인 및 다운로드</code></pre></p><p><strong>환자가 확인 가능한 정보</strong>:
+<ul>
+<li>처방약물 목록</li>
+<li>용량, 용법, 복용 기간</li>
+<li>약물 상호작용 정보</li>
+<li>알레르기 경고</li>
+<li>PDF 다운로드</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>처방전 화면 스크린샷</li>
+<li>처방전 프로세스 플로우차트</li>
+</ul></p><p>---</p><p><h2>Part 4: 의료진 워크플로우</h2></p><p><h3>슬라이드 20: 의료진 워크플로우 개요</h3>
+<strong>제목</strong>: 의료진 워크플로우</p><p><strong>역할별 주요 업무</strong>:
+<ul>
+<li><strong>의사</strong> (외과, 호흡기내과 등): 진단, 처방, 판독서 확인</li>
+<li><strong>원무과</strong>: 예약 관리, 수납 처리</li>
+<li><strong>방사선과</strong>: 영상 촬영, 업로드</li>
+<li><strong>영상의학과</strong>: 영상 판독, AI 분석</li>
+<li><strong>검사실</strong>: 검사 수행, 결과 입력</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>역할별 워크플로우 다이어그램</li>
+</ul></p><p>---</p><p><h3>슬라이드 20: 의사 워크플로우</h3>
+<strong>제목</strong>: 의사 워크플로우 (외과, 호흡기내과 등)</p><p><strong>진료 프로세스</strong>:
+<pre><code>1. 환자 접수 확인
+   ↓
+2. 진료 진행
+   ↓
+3. 검사/영상 촬영 의뢰 (OCS)
+   ↓
+4. AI 분석 결과 확인
+   ↓
+5. 판독서 확인
+   ↓
+6. 진단 및 치료 결정
+   ↓
+7. 처방전 발급 (OCS)
+   ↓
+8. 진료 기록 작성</code></pre></p><p><strong>의사 인터페이스 기능</strong>:
+<ul>
+<li>환자 정보 조회</li>
+<li>진료 기록 작성</li>
+<li>검사/영상 의뢰</li>
+<li>AI 분석 결과 확인</li>
+<li>처방전 발급</li>
+<li>예약 관리</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>의사 대시보드 스크린샷</li>
+<li>진료 프로세스 플로우차트</li>
+</ul></p><p>---</p><p><h3>슬라이드 22: 방사선과 워크플로우</h3>
+<strong>제목</strong>: 방사선과 워크플로우</p><p><strong>촬영 프로세스</strong>:
+<pre><code>1. 촬영 의뢰 확인 (OCS)
+   ↓
+2. 환자 확인 및 촬영 준비
+   ↓
+3. 의료 이미지 촬영
+<ul>
+<li>맘모그래피: 4장 (L-CC, R-CC, L-MLO, R-MLO)</li>
+<li>MRI: 4-ch DCE-MRI</li>
+<li>병리: SVS 파일</li>
+</ul>
+   ↓
+4. DICOM 파일 업로드 (Orthanc)
+   ↓
+5. 촬영 정보 입력
+   ↓
+6. 영상의학과에 알림</code></pre></p><p><strong>방사선과 인터페이스 기능</strong>:
+<ul>
+<li>촬영 스케줄 확인</li>
+<li>영상 업로드</li>
+<li>촬영 정보 입력</li>
+<li>이미지 품질 검사</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>업로드 화면 스크린샷</li>
+<li>촬영 프로세스 플로우차트</li>
+</ul></p><p>---</p><p><h3>슬라이드 23: 영상의학과 워크플로우</h3>
+<strong>제목</strong>: 영상의학과 워크플로우</p><p><strong>판독 프로세스</strong>:
+<pre><code>1. 업로드된 영상 확인
+   ↓
+2. AI 분석 실행
+<ul>
+<li>맘모그래피: 4-class 분류</li>
+<li>병리: Normal/Tumor 분류</li>
+<li>MRI: 3D 세그멘테이션</li>
+</ul>
+   ↓
+3. AI 분석 결과 확인
+   ↓
+4. 판독서 작성
+<ul>
+<li>소견</li>
+<li>권고사항</li>
+<li>신뢰도</li>
+</ul>
+   ↓
+5. 의사에게 알림</code></pre></p><p><strong>영상의학과 인터페이스 기능</strong>:
+<ul>
+<li>영상 조회</li>
+<li>AI 분석 실행</li>
+<li>판독서 작성</li>
+<li>3D 시각화 (MRI)</li>
+<li>판독 이력 관리</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>판독 화면 스크린샷</li>
+<li>AI 분석 결과 예시</li>
+</ul></p><p>---</p><p><h3>슬라이드 24: 원무과 워크플로우</h3>
+<strong>제목</strong>: 원무과 워크플로우</p><p><strong>주요 업무</strong>:
+1. <strong>예약 관리</strong>
+<ul>
+<li>예약 접수</li>
+<li>예약 승인/거부</li>
+<li>스케줄 관리</li>
+</ul></p><p>2. <strong>수납 처리</strong>
+<ul>
+<li>진료비 계산</li>
+<li>수납 처리</li>
+<li>영수증 발급</li>
+</ul></p><p>3. <strong>보험 처리</strong>
+<ul>
+<li>건강보험 처리</li>
+<li>의료급여 처리</li>
+</ul></p><p><strong>원무과 인터페이스 기능</strong>:
+<ul>
+<li>예약 관리 대시보드</li>
+<li>수납 처리</li>
+<li>통계 및 현황 조회</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>원무과 대시보드 스크린샷</li>
+<li>예약 관리 화면</li>
+</ul></p><p>---</p><p><h3>슬라이드 25: 검사실 워크플로우</h3>
+<strong>제목</strong>: 검사실 워크플로우</p><p><strong>주요 업무</strong>:
+1. <strong>검사 주문 확인</strong>
+<ul>
+<li>의사로부터 받은 검사 주문 확인 (OCS)</li>
+<li>검사 항목별 관리</li>
+</ul></p><p>2. <strong>검사 수행</strong>
+<ul>
+<li>검사 항목별 검사 수행</li>
+<li>검사 결과 입력</li>
+</ul></p><p>3. <strong>검사 결과 관리</strong>
+<ul>
+<li>검사 결과 입력 및 조회</li>
+<li>이상 결과 알림 (의사에게)</li>
+</ul></p><p><strong>검사실 인터페이스 기능</strong>:
+<ul>
+<li>검사 주문 조회</li>
+<li>검사 결과 입력</li>
+<li>검사 이력 관리</li>
+<li>이상 결과 알림</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>검사실 대시보드 스크린샷</li>
+<li>검사 결과 입력 화면</li>
+</ul></p><p>---</p><p><h3>슬라이드 26: 통합 대시보드</h3>
+<strong>제목</strong>: 통합 대시보드</p><p><strong>대시보드 기능</strong>:
+<ul>
+<li>실시간 현황 모니터링</li>
+<li>통계 및 분석</li>
+<li>알림 관리</li>
+<li>빠른 액세스 메뉴</li>
+</ul></p><p><strong>주요 지표</strong>:
+<ul>
+<li>오늘의 예약 수</li>
+<li>대기 중인 주문 수</li>
+<li>AI 분석 완료 수</li>
+<li>환자 현황</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>대시보드 스크린샷</li>
+<li>통계 차트</li>
+</ul></p><p>---</p><p><h2>Part 5: AI 분석 시스템</h2></p><p><h3>슬라이드 27: AI 분석 시스템 개요</h3>
+<strong>제목</strong>: AI 분석 시스템 개요</p><p><strong>5가지 AI 분석 모델</strong>:
+1. <strong>맘모그래피 분석</strong> (ResNet50)
+<ul>
+<li>4-class 분류 (Mass, Calcification, Asymmetry, Normal)</li>
+<li>4장 이미지 동시 분석</li>
+<li><strong>서비스</strong>: Mosec (Port 5007)</li>
+</ul></p><p>2. <strong>병리 이미지 분석</strong> (CLAM, nnUNet, H-optimus-0)
+<ul>
+<li>Normal/Tumor 분류</li>
+<li>Attention MIL 기반</li>
+<li>WSI (Whole Slide Image) 처리</li>
+<li><strong>서비스</strong>: 교육원 PC 워커 (HTTP API, 로컬 wsi 폴더 사용)</li>
+</ul></p><p>3. <strong>MRI 세그멘테이션</strong> (SwinUNETR)
+<ul>
+<li>3D 종양 세그멘테이션</li>
+<li>4-ch DCE-MRI 입력</li>
+<li>DICOM SEG 출력</li>
+<li><strong>서비스</strong>: Mosec (Port 5006)</li>
+</ul></p><p>4. <strong>폐암/pCR 예측</strong> (XGBoost/LightGBM)
+<ul>
+<li>환자 정보 기반 폐암 위험도 예측</li>
+<li>유전자 정보 기반 pCR 예측</li>
+<li><strong>서비스</strong>: Flask ML Service (Port 5002)</li>
+</ul></p><p>5. <strong>피부암 분석</strong> (딥러닝 모델)
+<ul>
+<li>피부 이미지 분류 (Flutter 앱용)</li>
+<li>1차 스크리닝 서비스</li>
+<li><strong>서비스</strong>: 챗봇 서버 (Port 8001)</li>
+</ul></p><p><strong>AI 서비스 아키텍처</strong>:
+<ul>
+<li>Mosec 프레임워크 (2개 서비스: MRI, 맘모그래피)</li>
+<li>교육원 PC 워커 (1개 서비스: 병리 이미지)</li>
+<li>Flask ML Service (1개 서비스: 폐암/pCR)</li>
+<li>Django 챗봇 서버 (1개 서비스: 피부암)</li>
+<li>각 모델별 독립 서비스</li>
+<li>HTTP API 기반 통신</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>AI 모델 구조도</li>
+<li>서비스 아키텍처</li>
+</ul></p><p>---</p><p><h3>슬라이드 28: 맘모그래피 AI 분석</h3>
+<strong>제목</strong>: 맘모그래피 AI 분석</p><p><strong>모델 정보</strong>:
+<ul>
+<li><strong>모델</strong>: ResNet50</li>
+<li><strong>입력</strong>: 4장 맘모그래피 이미지 (L-CC, R-CC, L-MLO, R-MLO)</li>
+<li><strong>출력</strong>: 4-class 분류 결과</li>
+<li><strong>클래스</strong>: Mass, Calcification, Architectural/Asymmetry, Normal</li>
+<li><strong>서비스</strong>: Mosec (Port 5007)</li>
+</ul></p><p><strong>분석 프로세스</strong>:
+<pre><code>1. 4장 DICOM 이미지 선택
+   ↓
+2. Django → Mosec 요청 (instance_ids만 전송)
+   ↓
+3. Mosec → Orthanc에서 DICOM 다운로드
+   ↓
+4. 전처리 (Otsu 임계값, Contour 검출, Crop, Resize 512×512)
+   ↓
+5. ResNet50 모델 추론
+   ↓
+6. 각 이미지별 분류 결과 반환
+   ↓
+7. 프론트엔드에 결과 표시</code></pre></p><p><strong>결과 표시</strong>:
+<ul>
+<li>각 뷰별 예측 클래스</li>
+<li>확률 (0-100%)</li>
+<li>클래스별 확률 바 차트</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>분석 프로세스 플로우차트</li>
+<li>결과 화면 스크린샷</li>
+</ul></p><p>---</p><p><h3>슬라이드 29: 병리 이미지 AI 분석</h3>
+<strong>제목</strong>: 병리 이미지 AI 분석</p><p><strong>모델 정보</strong>:
+<ul>
+<li><strong>분류 모델</strong>: CLAM (Attention MIL)</li>
+<li><strong>Feature Extractor</strong>: H-optimus-0 (Bioptimus)</li>
+<li><strong>세그멘테이션 모델</strong>: nnUNet</li>
+<li><strong>입력</strong>: WSI (Whole Slide Image, SVS 파일)</li>
+<li><strong>출력</strong>: Normal/Tumor 분류 + 세그멘테이션 결과</li>
+<li><strong>서비스</strong>: 교육원 PC 워커 (HTTP API 방식)</li>
+</ul></p><p><strong>특징</strong>:
+<ul>
+<li>GCP 서버의 Mosec이 아닌 교육원 PC에서 실행</li>
+<li>로컬 wsi 폴더의 파일 직접 사용</li>
+<li>HTTP API로 요청 폴링 및 결과 전송</li>
+</ul></p><p><strong>분석 프로세스</strong>:
+<pre><code>1. SVS 파일 업로드 (Orthanc)
+   ↓
+2. SVS → DICOM 변환 (Orthanc)
+   ↓
+3. Django → 교육원 PC 워커 요청 생성 (HTTP API)
+   ↓
+4. 교육원 PC 워커 → 요청 폴링 (30초마다)
+   ↓
+5. 교육원 PC 워커 → 로컬 wsi 폴더에서 파일 읽기
+   ↓
+6. OpenSlide로 WSI 열기
+   ↓
+7. 패치 추출 (최대 1000개, 224×224)
+   ↓
+8. Feature 추출 (H-optimus-0)
+   ↓
+9. CLAM 모델 추론 (Attention MIL) - 분류
+   ↓
+10. nnUNet 모델 추론 - 세그멘테이션 (선택적)
+   ↓
+11. 결과를 Django API로 전송 (HTTP POST)
+   ↓
+12. 프론트엔드에 결과 표시</code></pre></p><p><strong>결과 표시</strong>:
+<ul>
+<li>분류 결과 (Normal/Tumor)</li>
+<li>신뢰도 (%)</li>
+<li>클래스별 확률</li>
+<li>주요 관심 영역 (Top attention patches)</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>분석 프로세스 플로우차트</li>
+<li>CLAM 모델 구조도</li>
+<li>nnUNet 세그멘테이션 모델 구조도</li>
+<li>결과 화면 스크린샷</li>
+</ul></p><p>---</p><p><h3>슬라이드 30: MRI 세그멘테이션</h3>
+<strong>제목</strong>: MRI 세그멘테이션</p><p><strong>모델 정보</strong>:
+<ul>
+<li><strong>모델</strong>: SwinUNETR</li>
+<li><strong>입력</strong>: 4-ch DCE-MRI (4개 시퀀스, 각 96 슬라이스)</li>
+<li><strong>출력</strong>: 3D 세그멘테이션 마스크 (DICOM SEG)</li>
+<li><strong>목적</strong>: 종양 영역 세그멘테이션</li>
+<li><strong>서비스</strong>: Mosec (Port 5006)</li>
+</ul></p><p><strong>분석 프로세스</strong>:
+<pre><code>1. 4개 시리즈 선택
+   ↓
+2. Django → Orthanc에서 Instance ID 수집
+   ↓
+3. 중앙 96개 슬라이스 선택
+   ↓
+4. Django → Mosec 요청 (instance_ids만 전송)
+   ↓
+5. Mosec → Orthanc에서 DICOM 다운로드 (384개 파일)
+   ↓
+6. 3D 볼륨 변환 ([4, 96, 256, 256])
+   ↓
+7. 다운샘플링 ([4, 96, 96, 96])
+   ↓
+8. SwinUNETR 모델 추론 (sliding window)
+   ↓
+9. 후처리 (임계값 0.7, 형태학적 침식, 작은 객체 필터링)
+   ↓
+10. DICOM SEG 생성 (96 프레임)
+   ↓
+11. Orthanc에 업로드
+   ↓
+12. 프론트엔드에 오버레이 표시</code></pre></p><p><strong>결과 표시</strong>:
+<ul>
+<li>세그멘테이션 오버레이 (원본 MRI 위에 표시)</li>
+<li>종양 비율 (%)</li>
+<li>3D 시각화</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>분석 프로세스 플로우차트</li>
+<li>SwinUNETR 모델 구조도</li>
+<li>세그멘테이션 결과 예시</li>
+</ul></p><p>---</p><p><h3>슬라이드 31: 피부암 AI 분석</h3>
+<strong>제목</strong>: 피부암 AI 분석 (Flutter 앱)</p><p><strong>서비스 정보</strong>:
+<ul>
+<li><strong>서비스 위치</strong>: 챗봇 서버 (Port 8001)</li>
+<li><strong>대상</strong>: Flutter 모바일 앱 사용자</li>
+<li><strong>목적</strong>: 병원 방문 전 1차 스크리닝</li>
+</ul></p><p><strong>분석 프로세스</strong>:
+<pre><code>1. Flutter 앱에서 피부 이미지 촬영
+   ↓
+2. 챗봇 서버로 이미지 전송 (Port 8001)
+   ↓
+3. 딥러닝 모델 분석
+   ↓
+4. 결과 반환 (정상/의심/위험)
+   ↓
+5. 병원 방문 권장 여부 안내
+   ↓
+6. 결과에 따른 피부과 예약 연계</code></pre></p><p><strong>결과 표시</strong>:
+<ul>
+<li>분류 결과 (정상/의심/위험)</li>
+<li>신뢰도 (%)</li>
+<li>병원 방문 권장 여부</li>
+<li>예약 연계 기능</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>Flutter 앱 화면 스크린샷</li>
+<li>분석 프로세스 플로우차트</li>
+<li>결과 화면 예시</li>
+</ul></p><p>---</p><p><h3>슬라이드 32: AI 서비스 아키텍처 (Mosec)</h3>
+<strong>제목</strong>: AI 서비스 아키텍처 (Mosec)</p><p><strong>Mosec 프레임워크</strong>:
+<ul>
+<li>고성능 모델 서빙 프레임워크</li>
+<li>비동기 처리 지원</li>
+<li>배치 처리 지원</li>
+</ul></p><p><strong>서비스 구성</strong>:
+<ul>
+<li><strong>MRI 세그멘테이션</strong>: Port 5006 (Mosec, GCP 서버)</li>
+<li><strong>맘모그래피 분석</strong>: Port 5007 (Mosec, GCP 서버)</li>
+<li><strong>병리 이미지 분석</strong>: 교육원 PC 워커 (HTTP API, 로컬 wsi 폴더)</li>
+<li><strong>폐암/pCR 예측</strong>: Port 5002 (Flask ML Service, GCP 서버)</li>
+<li><strong>피부암 분석</strong>: Port 8001 (챗봇 서버, GCP 서버)</li>
+</ul></p><p><strong>통신 방식</strong>:
+<ul>
+<li>HTTP API 기반</li>
+<li>JSON 요청/응답</li>
+<li>instance_ids만 전송 (DICOM은 Mosec에서 직접 다운로드)</li>
+</ul></p><p><strong>장점</strong>:
+<ul>
+<li>413 Request Entity Too Large 에러 방지</li>
+<li>네트워크 부하 감소</li>
+<li>확장성 향상</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>Mosec 서비스 아키텍처</li>
+<li>통신 흐름도</li>
+</ul></p><p>---</p><p><h3>슬라이드 33: AI 분석 성능</h3>
+<strong>제목</strong>: AI 분석 성능</p><p><strong>맘모그래피 분석</strong> (Port 5007):
+<ul>
+<li><strong>처리 시간</strong>: 약 15-20초 (4장)</li>
+<li><strong>정확도</strong>: (모델 성능에 따라)</li>
+<li><strong>병렬 처리 가능</strong>: ~5-8초로 단축 가능</li>
+</ul></p><p><strong>병리 이미지 분석</strong> (교육원 PC 워커):
+<ul>
+<li><strong>처리 시간</strong>: 약 30-60초 (WSI 크기에 따라)</li>
+<li><strong>패치 수</strong>: 최대 1000개</li>
+<li><strong>정확도</strong>: (모델 성능에 따라)</li>
+<li><strong>특징</strong>: 교육원 PC에서 로컬 파일 직접 처리</li>
+</ul></p><p><strong>MRI 세그멘테이션</strong> (Port 5006):
+<ul>
+<li><strong>처리 시간</strong>: 약 5-10분 (DICOM 다운로드 시간 포함)</li>
+<li><strong>다운로드 시간</strong>: 약 2-5분 (384개 DICOM 파일)</li>
+<li><strong>모델 추론 시간</strong>: 약 30-60초</li>
+<li><strong>정확도</strong>: (모델 성능에 따라)</li>
+</ul></p><p><strong>폐암/pCR 예측</strong> (Port 5002):
+<ul>
+<li><strong>처리 시간</strong>: 약 1-2초 (환자 정보 기반)</li>
+<li><strong>입력</strong>: 환자 정보, 유전자 정보</li>
+<li><strong>출력</strong>: 위험도 점수, pCR 예측 확률</li>
+</ul></p><p><strong>피부암 분석</strong> (Port 8001):
+<ul>
+<li><strong>처리 시간</strong>: 약 2-5초 (이미지 1장)</li>
+<li><strong>입력</strong>: 피부 이미지 (Flutter 앱)</li>
+<li><strong>출력</strong>: 정상/의심/위험 분류</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>성능 비교표</li>
+<li>처리 시간 그래프</li>
+</ul></p><p>---</p><p><h3>슬라이드 34: AI 분석 결과 활용</h3>
+<strong>제목</strong>: AI 분석 결과 활용</p><p><strong>의료진 활용</strong>:
+<ul>
+<li>진단 지원 도구</li>
+<li>판독 시간 단축</li>
+<li>객관적 기준 제공</li>
+<li>일관된 진단 지원</li>
+</ul></p><p><strong>환자 활용</strong>:
+<ul>
+<li>조기 발견</li>
+<li>치료 계획 수립</li>
+<li>예후 예측</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>활용 사례</li>
+<li>효과 분석</li>
+</ul></p><p>---</p><p><h2>Part 6: 핵심 시스템 (OCS/RIS/LIS)</h2></p><p><h3>슬라이드 35: OCS (처방전달시스템) 개요</h3>
+<strong>제목</strong>: OCS (Order Communication System)</p><p><strong>OCS란?</strong>
+<ul>
+<li>의사가 처방전, 검사, 영상 촬영을 주문하고 각 부서로 자동 전달하는 시스템</li>
+</ul></p><p><strong>주문 유형</strong>:
+1. <strong>처방전</strong> (Prescription)
+<ul>
+<li>약국으로 전달</li>
+<li>약물 상호작용 체크</li>
+<li>알레르기 체크</li>
+</ul></p><p>2. <strong>검사</strong> (Lab Test)
+<ul>
+<li>검사실로 전달</li>
+<li>LIS 연동</li>
+</ul></p><p>3. <strong>영상 촬영</strong> (Imaging)
+<ul>
+<li>방사선과로 전달</li>
+<li>RIS 연동</li>
+</ul></p><p>4. <strong>조직 검사</strong> (Tissue Exam)
+<ul>
+<li>병리과로 전달</li>
+</ul></p><p><strong>주문 상태</strong>:
+<ul>
+<li>대기중 (pending) → 전달됨 (sent) → 처리중 (processing) → 완료 (completed)</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>OCS 시스템 구조도</li>
+<li>주문 프로세스 플로우차트</li>
+</ul></p><p>---</p><p><h3>슬라이드 36: OCS 주요 기능</h3>
+<strong>제목</strong>: OCS 주요 기능</p><p><strong>1. 주문 생성 및 관리</strong>
+<ul>
+<li>의사가 주문 생성</li>
+<li>주문 수정/취소</li>
+<li>주문 이력 조회</li>
+</ul></p><p><strong>2. 자동 검증 시스템</strong>
+<ul>
+<li><strong>약물 상호작용 체크</strong></li>
+<li>두 약물 간 상호작용 검사</li>
+<li>심각도 분류 (경미/중등도/심각)</li>
+<li>심각한 상호작용 발견 시 주문 전달 불가</li>
+</ul></p><p><ul>
+<li><strong>알레르기 체크</strong></li>
+<li>환자 알레르기 정보와 주문 항목 비교</li>
+<li>알레르기 발견 시 경고 표시</li>
+</ul></p><p><strong>3. 우선순위 관리</strong>
+<ul>
+<li>일반 (routine)</li>
+<li>긴급 (urgent)</li>
+<li>즉시 (stat)</li>
+<li>응급 (emergency)</li>
+</ul></p><p><strong>4. 실시간 알림</strong>
+<ul>
+<li>주문 상태 변경 시 알림</li>
+<li>부서별 알림</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>OCS 화면 스크린샷</li>
+<li>검증 시스템 플로우차트</li>
+</ul></p><p>---</p><p><h3>슬라이드 37: RIS (영상정보시스템)</h3>
+<strong>제목</strong>: RIS (Radiology Information System)</p><p><strong>RIS란?</strong>
+<ul>
+<li>영상의학과의 업무를 관리하는 시스템</li>
+</ul></p><p><strong>주요 기능</strong>:
+1. <strong>영상 촬영 의뢰 관리</strong>
+<ul>
+<li>의사로부터 받은 영상 촬영 의뢰 관리</li>
+<li>촬영 스케줄 관리</li>
+</ul></p><p>2. <strong>영상 업로드</strong>
+<ul>
+<li>방사선과에서 촬영한 영상 업로드</li>
+<li>DICOM 파일 관리</li>
+</ul></p><p>3. <strong>영상 분석</strong>
+<ul>
+<li>영상의학과에서 영상 분석 및 판독</li>
+<li>AI 분석 실행</li>
+</ul></p><p>4. <strong>판독서 작성</strong>
+<ul>
+<li>소견, 권고사항, 신뢰도 입력</li>
+<li>의사에게 자동 알림</li>
+</ul></p><p><strong>Orthanc PACS 연동</strong>:
+<ul>
+<li>DICOM 영상 저장 및 관리</li>
+<li>RESTful API 통신</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>RIS 시스템 구조도</li>
+<li>영상 관리 화면</li>
+</ul></p><p>---</p><p><h3>슬라이드 38: LIS (검사정보시스템)</h3>
+<strong>제목</strong>: LIS (Laboratory Information System)</p><p><strong>LIS란?</strong>
+<ul>
+<li>검사실의 업무를 관리하는 시스템</li>
+</ul></p><p><strong>주요 기능</strong>:
+1. <strong>검사 주문 관리</strong>
+<ul>
+<li>의사로부터 받은 검사 주문 관리</li>
+<li>검사 항목별 관리</li>
+</ul></p><p>2. <strong>검사 결과 입력</strong>
+<ul>
+<li>검사 결과 입력 및 조회</li>
+<li>검사 항목별 결과 관리</li>
+</ul></p><p>3. <strong>이상 결과 알림</strong>
+<ul>
+<li>이상 결과 발견 시 의사에게 알림</li>
+</ul></p><p><strong>OCS 연동</strong>:
+<ul>
+<li>검사 주문 수신</li>
+<li>검사 완료 시 상태 업데이트</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>LIS 시스템 구조도</li>
+<li>검사 결과 화면</li>
+</ul></p><p>---</p><p><h3>슬라이드 39: 시스템 통합</h3>
+<strong>제목</strong>: 시스템 통합</p><p><strong>통합 시스템</strong>:
+<ul>
+<li>OCS ↔ RIS: 영상 촬영 의뢰 및 결과 전달</li>
+<li>OCS ↔ LIS: 검사 주문 및 결과 전달</li>
+<li>OCS ↔ 약국: 처방전 전달</li>
+<li>RIS ↔ Orthanc: DICOM 영상 관리</li>
+<li>모든 시스템 ↔ Django: 통합 관리</li>
+</ul></p><p><strong>데이터 흐름</strong>:
+<pre><code>의사 → OCS (주문 생성)
+  ↓
+OCS → RIS/LIS/약국 (주문 전달)
+  ↓
+각 부서 → 처리 완료
+  ↓
+결과 → OCS (상태 업데이트)
+  ↓
+의사/환자 → 결과 확인</code></pre></p><p><strong>시각 자료</strong>:
+<ul>
+<li>시스템 통합 다이어그램</li>
+<li>데이터 흐름도</li>
+</ul></p><p>---</p><p><h2>Part 7: 성과 및 향후 계획</h2></p><p><h3>슬라이드 40: 프로젝트 성과</h3>
+<strong>제목</strong>: 프로젝트 성과 - 부트캠프 최종 프로젝트 완성</p><p><strong>구축 완료 항목</strong> (정량적 지표):
+<ul>
+<li>✅ <strong>플랫폼</strong>: 환자 홈페이지 (웹 + Flutter 앱), 의료진 플랫폼</li>
+<li>✅ <strong>사용자 역할</strong>: 6가지 (의사, 원무과, 환자, 방사선과, 영상의학과, 검사실)</li>
+<li>✅ <strong>핵심 시스템</strong>:</li>
+<li>OCS (처방전달시스템) - 주문 자동 검증 및 전달</li>
+<li>RIS (영상정보시스템) - 영상 관리 및 판독</li>
+<li>LIS (검사정보시스템) - 검사 결과 관리</li>
+<li>PACS 통합 (Orthanc) - DICOM 영상 저장 및 관리</li>
+<li>✅ <strong>AI 분석 시스템</strong>: 5가지 모델</li>
+<li>맘모그래피: ResNet50, Mosec (Port 5007), 4-class 분류</li>
+<li>병리: CLAM + nnUNet + H-optimus-0, 교육원 PC 워커, Normal/Tumor 분류</li>
+<li>MRI: SwinUNETR, Mosec (Port 5006), 3D 세그멘테이션</li>
+<li>폐암/pCR: XGBoost/LightGBM, Flask ML (Port 5002), 위험도 예측</li>
+<li>피부암: 딥러닝 모델, 챗봇 서버 (Port 8001), 1차 스크리닝</li>
+<li>✅ <strong>인프라</strong>: 12개 독립 서비스, GCP 배포, 프로덕션 환경 운영</li>
+<li>✅ <strong>통신 시스템</strong>: WebSocket 실시간 채팅, 실시간 알림</li>
+<li>✅ <strong>추가 기능</strong>: 약물 검색 및 상호작용 검사 (FastAPI), 챗봇 서버</li>
+</ul></p><p><strong>기술적 성취</strong> (부트캠프 발표 강조):
+<ul>
+<li>🎯 <strong>MSA 아키텍처 구현</strong>: 12개 마이크로서비스, 독립 배포 및 확장 가능</li>
+<li>🎯 <strong>AI 서빙 최적화</strong>: Mosec 프레임워크 활용, 고성능 모델 서빙</li>
+<li>🎯 <strong>실시간 통신</strong>: Django Channels + Daphne, WebSocket 기반</li>
+<li>🎯 <strong>클라우드 네이티브</strong>: GCP 배포, Docker 컨테이너화, Nginx 리버스 프록시</li>
+<li>🎯 <strong>의료 표준 준수</strong>: DICOM 표준, PACS 통합, 의료 데이터 보안</li>
+</ul></p><p><strong>기대 효과</strong> (정량적):
+<ul>
+<li>📊 <strong>의료진 업무 효율성</strong>: 시스템 통합으로 업무 시간 30-40% 단축 예상</li>
+<li>📊 <strong>진단 정확도</strong>: AI 지원으로 초보 의료진도 경험 있는 의료진 수준 달성</li>
+<li>📊 <strong>환자 만족도</strong>: 빠른 결과 확인, 투명한 정보 제공으로 만족도 향상</li>
+<li>📊 <strong>의료 서비스 품질</strong>: 객관적 진단 기준, 일관된 진단 지원</li>
+</ul></p><p><strong>프로젝트 규모</strong> (인상적인 수치):
+<ul>
+<li><strong>코드 라인 수</strong>: [추정치] (프론트엔드 + 백엔드)</li>
+<li><strong>API 엔드포인트</strong>: 50+ 개</li>
+<li><strong>데이터베이스 테이블</strong>: 20+ 개</li>
+<li><strong>서비스 수</strong>: 12개</li>
+<li><strong>AI 모델</strong>: 5개</li>
+<li><strong>사용자 역할</strong>: 6가지</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>성과 요약표</li>
+<li>효과 분석 그래프</li>
+<li>프로젝트 규모 인포그래픽</li>
+<li>기술 스택 시각화</li>
+</ul></p><p>---</p><p><h3>슬라이드 41: 기술적 성과 및 도전 과제 해결</h3>
+<strong>제목</strong>: 기술적 성과 - 실전 문제 해결 능력</p><p><strong>아키텍처 설계</strong>:
+<ul>
+<li>✅ <strong>MSA (Microservices Architecture)</strong>: 12개 독립 서비스, 확장 가능한 구조</li>
+<li>✅ <strong>모듈화된 설계</strong>: 각 서비스 독립 배포 및 유지보수</li>
+<li>✅ <strong>API 기반 통신</strong>: RESTful API, HTTP/WebSocket 통신</li>
+<li>✅ <strong>서비스 분리</strong>: 프론트엔드, 백엔드, AI 서비스, 데이터베이스 독립 운영</li>
+</ul></p><p><strong>AI/ML 구현</strong>:
+<ul>
+<li>✅ <strong>5가지 AI 모델 구축 및 통합</strong>:</li>
+<li>맘모그래피: ResNet50, Mosec (Port 5007), 4-class 분류</li>
+<li>병리: CLAM + nnUNet + H-optimus-0, 교육원 PC 워커, WSI 처리</li>
+<li>MRI: SwinUNETR, Mosec (Port 5006), 3D 세그멘테이션</li>
+<li>폐암/pCR: XGBoost/LightGBM, Flask ML (Port 5002), 예측 모델</li>
+<li>피부암: 딥러닝 모델, 챗봇 서버 (Port 8001), 모바일 앱 연동</li>
+<li>✅ <strong>Mosec 프레임워크 활용</strong>: 고성능 모델 서빙, 비동기 처리, 배치 최적화</li>
+<li>✅ <strong>대용량 데이터 처리</strong>: instance_ids만 전송으로 413 에러 방지</li>
+</ul></p><p><strong>인프라 및 배포</strong>:
+<ul>
+<li>✅ <strong>GCP 클라우드 환경</strong>: 프로덕션 수준의 인프라 구축</li>
+<li>✅ <strong>Docker 컨테이너화</strong>: Orthanc PACS 서버 컨테이너화</li>
+<li>✅ <strong>Nginx 리버스 프록시</strong>: 프론트엔드 서빙 및 API 라우팅</li>
+<li>✅ <strong>자동 배포</strong>: GitHub Actions를 통한 CI/CD 파이프라인</li>
+</ul></p><p><strong>보안 및 규정 준수</strong>:
+<ul>
+<li>✅ <strong>RBAC (Role-Based Access Control)</strong>: 6가지 역할별 접근 제어</li>
+<li>✅ <strong>데이터 암호화</strong>: 전송 중 및 저장 시 암호화</li>
+<li>✅ <strong>의료 데이터 규정 준수</strong>: 개인정보보호법, 의료법 준수</li>
+<li>✅ <strong>DICOM 표준 준수</strong>: 의료 영상 표준 포맷 처리</li>
+</ul></p><p><strong>주요 도전 과제 및 해결 방법</strong> (발표 시 강조):</p><p>1. <strong>도전 과제</strong>: 대용량 DICOM 파일 전송 시 413 Request Entity Too Large 에러
+<ul>
+<li><strong>해결 방법</strong>: instance_ids만 전송, Mosec에서 Orthanc 직접 다운로드</li>
+<li><strong>효과</strong>: 네트워크 부하 90% 감소, 에러 완전 해결</li>
+</ul></p><p>2. <strong>도전 과제</strong>: 병리 이미지 WSI 파일의 대용량 처리 (수 GB)
+<ul>
+<li><strong>해결 방법</strong>: 교육원 PC 워커 활용, 로컬 파일 직접 처리, HTTP API 폴링</li>
+<li><strong>효과</strong>: 서버 부하 분산, 처리 시간 단축</li>
+</ul></p><p>3. <strong>도전 과제</strong>: 실시간 채팅 및 알림 구현
+<ul>
+<li><strong>해결 방법</strong>: Django Channels + Daphne (ASGI), WebSocket 통신</li>
+<li><strong>효과</strong>: 실시간 양방향 통신 구현, 사용자 경험 향상</li>
+</ul></p><p>4. <strong>도전 과제</strong>: 여러 AI 모델의 독립적 서빙 및 확장성
+<ul>
+<li><strong>해결 방법</strong>: MSA 구조, 각 모델별 독립 서비스, Mosec 프레임워크</li>
+<li><strong>효과</strong>: 모델별 독립 확장 가능, 유지보수 용이</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>기술 스택 시각화</li>
+<li>아키텍처 다이어그램</li>
+<li>도전 과제 해결 과정 플로우차트</li>
+<li>성능 개선 그래프</li>
+</ul></p><p>---</p><p><h3>슬라이드 42: 향후 계획 및 마무리</h3>
+<strong>제목</strong>: 향후 계획 및 프로젝트를 마치며</p><p><strong>단기 계획</strong> (3-6개월):
+1. <strong>AI 모델 개선</strong>
+<ul>
+<li>모델 정확도 향상 (더 많은 학습 데이터, 하이퍼파라미터 튜닝)</li>
+<li>새로운 모델 추가 (초음파, CT 등)</li>
+<li>실시간 학습 시스템 구축 (Online Learning)</li>
+</ul></p><p>2. <strong>기능 확장</strong>
+<ul>
+<li>추가 검사 유형 지원 (초음파, CT, PET-CT 등)</li>
+<li>Flutter 모바일 앱 기능 확장 (예약, 결과 확인 등)</li>
+<li>챗봇 고도화 (LLM 기반 자연어 처리)</li>
+</ul></p><p>3. <strong>성능 최적화</strong>
+<ul>
+<li>AI 분석 처리 시간 단축 (병렬 처리, GPU 최적화)</li>
+<li>시스템 안정성 향상 (모니터링, 로깅 강화)</li>
+<li>사용자 경험 개선 (UI/UX 개선)</li>
+</ul></p><p><strong>중장기 계획</strong> (6개월-1년):
+1. <strong>규정 준수 강화</strong>
+<ul>
+<li>의료 데이터 보안 강화 (암호화 강화, 접근 로그 관리)</li>
+<li>규정 업데이트 대응 (의료법, 개인정보보호법)</li>
+<li>인증 획득 (의료기기 인증, 정보보안 인증)</li>
+</ul></p><p>2. <strong>시스템 통합 확대</strong>
+<ul>
+<li>EMR/EHR 시스템 연동</li>
+<li>외부 의료기관 연동</li>
+<li>FHIR Server 완전 구현</li>
+</ul></p><p>3. <strong>비즈니스 확장</strong>
+<ul>
+<li>다른 병원으로의 확장</li>
+<li>상용화 준비</li>
+<li>파트너십 구축</li>
+</ul></p><p><strong>프로젝트를 마치며</strong> (부트캠프 발표용):</p><p><strong>배운 점</strong>:
+<ul>
+<li>🎓 <strong>실전 경험</strong>: 실제 의료 환경을 고려한 시스템 설계</li>
+<li>🎓 <strong>기술 통합</strong>: 다양한 기술 스택의 통합 및 최적화</li>
+<li>🎓 <strong>문제 해결</strong>: 실제 문제 발생 시 해결 방법 도출</li>
+<li>🎓 <strong>협업</strong>: 팀원들과의 협업 및 역할 분담</li>
+</ul></p><p><strong>성취감</strong>:
+<ul>
+<li>✅ <strong>완성도 높은 프로젝트</strong>: 프로덕션 수준의 시스템 구축</li>
+<li>✅ <strong>기술적 깊이</strong>: MSA, AI 서빙, 실시간 통신 등 고급 기술 활용</li>
+<li>✅ <strong>실용성</strong>: 실제 의료진이 사용할 수 있는 시스템</li>
+<li>✅ <strong>확장성</strong>: 향후 확장 가능한 구조 설계</li>
+</ul></p><p><strong>감사 인사</strong>:
+<ul>
+<li>프로젝트 참여자 및 팀원</li>
+<li>부트캠프 강사진 및 멘토</li>
+<li>협력 기관 및 지원 기관</li>
+<li>프로젝트를 지지해주신 모든 분들</li>
+</ul></p><p><strong>시각 자료</strong>:
+<ul>
+<li>로드맵 (단기/중장기)</li>
+<li>향후 계획 타임라인</li>
+<li>프로젝트 하이라이트 요약</li>
+<li>감사 인사 슬라이드</li>
+</ul></p><p>---</p><p><h2>📝 발표 팁 및 전략</h2></p><p><h3>시간 배분 (25분 기준)</h3>
+<ul>
+<li><strong>Part 1: 프로젝트 개요</strong> (3분) - 문제 정의와 해결 방안 강조</li>
+<li><strong>Part 2: 시스템 아키텍처</strong> (4분) - MSA 구조, 포트 사용 현황, 기술 스택</li>
+<li><strong>Part 3: 환자 여정</strong> (3분) - 사용자 경험 중심 설명</li>
+<li><strong>Part 4: 의료진 워크플로우</strong> (3분) - 실제 업무 프로세스 반영</li>
+<li><strong>Part 5: AI 분석 시스템</strong> (6분) ⭐ <strong>핵심 강조</strong> - 5가지 AI 모델 상세 설명</li>
+<li><strong>Part 6: 핵심 시스템 (OCS/RIS/LIS)</strong> (3분) - 통합 시스템의 가치</li>
+<li><strong>Part 7: 성과 및 향후 계획</strong> (3분) - 프로젝트 성과와 기술적 성취</li>
+</ul></p><p><h3>발표 시 강조 포인트 (부트캠프 발표용)</h3></p><p>#### 1. 기술적 깊이 강조
+<ul>
+<li><strong>MSA 아키텍처</strong>: 12개 독립 서비스, 마이크로서비스 설계 원칙</li>
+<li><strong>AI 서빙 최적화</strong>: Mosec 프레임워크 활용, instance_ids만 전송으로 413 에러 방지</li>
+<li><strong>실시간 통신</strong>: WebSocket (Daphne), Django Channels 활용</li>
+<li><strong>클라우드 인프라</strong>: GCP 배포, Nginx 리버스 프록시, Docker 컨테이너화</li>
+</ul></p><p>#### 2. 실제 구현 내용 강조
+<ul>
+<li><strong>DICOM 표준 준수</strong>: Orthanc PACS 통합, 의료 영상 표준 포맷 처리</li>
+<li><strong>의료진 워크플로우 반영</strong>: 실제 병원 업무 프로세스 기반 설계</li>
+<li><strong>보안 구현</strong>: RBAC, CSRF 보호, 세션 관리, 데이터 암호화</li>
+<li><strong>성능 최적화</strong>: 비동기 처리, 배치 처리, 캐싱 전략</li>
+</ul></p><p>#### 3. 도전 과제와 해결 방법
+<ul>
+<li><strong>문제</strong>: 대용량 DICOM 파일 전송 시 413 Request Entity Too Large 에러</li>
+<li><strong>해결</strong>: instance_ids만 전송, Mosec에서 Orthanc 직접 다운로드</li>
+<li><strong>문제</strong>: 병리 이미지 분석의 대용량 WSI 파일 처리</li>
+<li><strong>해결</strong>: 교육원 PC 워커 활용, 로컬 파일 직접 처리, HTTP API 폴링</li>
+<li><strong>문제</strong>: 실시간 채팅 및 알림 구현</li>
+<li><strong>해결</strong>: Django Channels + Daphne (ASGI), WebSocket 통신</li>
+<li><strong>문제</strong>: 여러 AI 모델의 독립적 서빙</li>
+<li><strong>해결</strong>: MSA 구조, 각 모델별 독립 서비스, Mosec 프레임워크 활용</li>
+</ul></p><p>#### 4. 프로젝트 성과 강조
+<ul>
+<li><strong>구현 규모</strong>: 12개 서비스, 6가지 역할, 5가지 AI 모델</li>
+<li><strong>기술 스택</strong>: Django, React, PyTorch, GCP, MSA</li>
+<li><strong>실제 배포</strong>: GCP 프로덕션 환경 운영</li>
+<li><strong>표준 준수</strong>: DICOM, RESTful API, 의료 데이터 보안 규정</li>
+</ul></p><p><h3>발표 시 주의사항</h3>
+1. <strong>시각 자료 활용</strong>: 
+<ul>
+<li>다이어그램, 스크린샷, 플로우차트 적극 활용</li>
+<li>아키텍처 다이어그램으로 시스템 구조 명확히 설명</li>
+<li>실제 화면 데모로 사용자 경험 보여주기</li>
+</ul></p><p>2. <strong>기술적 세부사항 준비</strong>:
+<ul>
+<li>각 서비스의 포트 번호와 역할</li>
+<li>AI 모델의 입력/출력 형식</li>
+<li>데이터 흐름과 통신 프로토콜</li>
+<li>성능 지표 (처리 시간, 정확도 등)</li>
+</ul></p><p>3. <strong>질문 대비</strong>:
+<ul>
+<li>각 시스템의 기술적 세부사항 준비</li>
+<li>도전 과제와 해결 방법 설명</li>
+<li>향후 개선 방향 제시</li>
+</ul></p><p>4. <strong>시간 관리</strong>: 
+<ul>
+<li>각 파트별 시간 엄수</li>
+<li>AI 분석 시스템에 더 많은 시간 할당 (핵심 기능)</li>
+<li>질문 시간 확보</li>
+</ul></p><p><h3>예상 질문 및 답변 준비</h3></p><p>#### 기술적 질문
+1. <strong>Q: AI 모델의 정확도는?</strong>
+<ul>
+<li>A: 각 모델별로 학습 데이터셋과 검증 결과가 다릅니다. 맘모그래피는 TCGA 데이터셋 기반, 병리는 CLAM 모델의 Attention MIL 기반으로 높은 정확도를 보입니다. 실제 운영 환경에서는 지속적인 모델 개선이 필요합니다.</li>
+</ul></p><p>2. <strong>Q: 시스템의 확장성은?</strong>
+<ul>
+<li>A: MSA 아키텍처로 설계되어 각 서비스를 독립적으로 확장 가능합니다. Mosec 프레임워크는 배치 처리와 비동기 처리를 지원하여 트래픽 증가에 대응할 수 있습니다.</li>
+</ul></p><p>3. <strong>Q: 보안 조치는?</strong>
+<ul>
+<li>A: RBAC 기반 접근 제어, CSRF 보호, 세션 관리, 데이터 암호화를 구현했습니다. 의료 데이터는 개인정보보호법과 의료법을 준수하여 처리합니다.</li>
+</ul></p><p>4. <strong>Q: 실제 운영 환경에서의 성능은?</strong>
+<ul>
+<li>A: GCP 프로덕션 환경에서 운영 중이며, 맘모그래피 분석은 15-20초, MRI 세그멘테이션은 5-10분 내 처리됩니다. 성능 모니터링과 최적화를 지속적으로 진행하고 있습니다.</li>
+</ul></p><p>#### 프로젝트 관련 질문
+5. <strong>Q: 프로젝트 기간은?</strong>
+<ul>
+<li>A: 약 5-6주 동안 개발했으며, 기획부터 배포까지 전체 프로세스를 경험했습니다.</li>
+</ul></p><p>6. <strong>Q: 가장 큰 도전 과제는?</strong>
+<ul>
+<li>A: 대용량 DICOM 파일 처리와 여러 AI 모델의 통합이었습니다. MSA 구조와 Mosec 프레임워크를 활용하여 해결했습니다.</li>
+</ul></p><p>7. <strong>Q: 향후 계획은?</strong>
+<ul>
+<li>A: AI 모델 정확도 개선, 추가 검사 유형 지원, 모바일 앱 기능 확장, 성능 최적화를 계획하고 있습니다.</li>
+</ul></p><p><h3>발표 시 데모 시나리오 (선택사항)</h3>
+1. <strong>환자 로그인 → 예약 → 검사 결과 확인</strong> (2분)
+2. <strong>의사 진료 → AI 분석 실행 → 판독서 작성</strong> (2분)
+3. <strong>OCS 주문 생성 → 자동 검증 → 알림</strong> (1분)</p><p><h3>시각 자료 체크리스트</h3>
+<ul>
+<li>[ ] 시스템 아키텍처 다이어그램</li>
+<li>[ ] 포트 사용 현황 표</li>
+<li>[ ] AI 모델 구조도 (각 모델별)</li>
+<li>[ ] 데이터 흐름도 (각 프로세스별)</li>
+<li>[ ] 실제 화면 스크린샷 (주요 기능)</li>
+<li>[ ] 성과 그래프 및 수치</li>
+<li>[ ] 기술 스택 로고</li>
+</ul></p><p>---</p><p>---</p><p><h2>📌 부트캠프 발표 체크리스트</h2></p><p><h3>발표 전 준비사항</h3>
+<ul>
+<li>[ ] 실제 시스템 데모 준비 (환자 로그인 → 예약 → 결과 확인)</li>
+<li>[ ] AI 분석 데모 준비 (맘모그래피, 병리, MRI 중 1-2개)</li>
+<li>[ ] 질문 대비 답변 준비 (기술적 질문, 프로젝트 관련 질문)</li>
+<li>[ ] 시각 자료 최종 점검 (다이어그램, 스크린샷, 그래프)</li>
+<li>[ ] 발표 시간 연습 (25분 내외)</li>
+<li>[ ] 핵심 메시지 정리 (3가지 핵심 포인트)</li>
+</ul></p><p><h3>발표 시 강조할 3가지 핵심 포인트</h3>
+1. <strong>기술적 깊이</strong>: MSA 아키텍처, 5가지 AI 모델, 실시간 통신 구현
+2. <strong>실전 문제 해결</strong>: 대용량 파일 처리, 실시간 통신, AI 서빙 최적화
+3. <strong>완성도</strong>: 프로덕션 수준의 시스템, 실제 배포 및 운영</p><p><h3>발표 시 주의할 점</h3>
+<ul>
+<li>⚠️ 기술 용어 설명: 청중이 이해할 수 있도록 간단히 설명</li>
+<li>⚠️ 시간 관리: 각 파트별 시간 엄수, AI 분석 시스템에 더 많은 시간</li>
+<li>⚠️ 질문 대응: 모르는 것은 솔직히 말하고, 향후 개선 계획 제시</li>
+<li>⚠️ 데모 준비: 실제 화면 보여주기, 가능하면 라이브 데모</li>
+</ul></p><p><h3>예상 질문 대비 (상세 답변 준비)</h3>
+1. <strong>"이 프로젝트에서 가장 어려웠던 부분은?"</strong>
+<ul>
+<li>대용량 DICOM 파일 처리와 여러 AI 모델 통합</li>
+<li>MSA 구조 설계 및 서비스 간 통신</li>
+<li>실제 의료진 워크플로우 반영</li>
+</ul></p><p>2. <strong>"왜 이 기술 스택을 선택했나요?"</strong>
+<ul>
+<li>Django: 빠른 개발, 의료 데이터 처리에 적합</li>
+<li>React: 사용자 경험, 역할별 인터페이스 구현</li>
+<li>Mosec: 고성능 AI 서빙, 배치 처리 지원</li>
+<li>GCP: 안정적인 클라우드 인프라, 확장성</li>
+</ul></p><p>3. <strong>"실제 병원에서 사용할 수 있나요?"</strong>
+<ul>
+<li>현재는 프로토타입 단계</li>
+<li>실제 운영을 위해서는 의료 인증, 보안 강화 필요</li>
+<li>하지만 기본 구조와 기능은 실제 병원 환경을 고려하여 설계</li>
+</ul></p><p>4. <strong>"팀원 역할 분담은 어떻게 했나요?"</strong>
+<ul>
+<li>[팀원별 역할 명시 필요]</li>
+<li>프론트엔드, 백엔드, AI 모델, 인프라 등 역할 분담</li>
+</ul></p><p>5. <strong>"향후 어떻게 발전시킬 계획인가요?"</strong>
+<ul>
+<li>AI 모델 정확도 개선</li>
+<li>추가 검사 유형 지원</li>
+<li>상용화 준비</li>
+</ul></p><p>---</p><p><strong>작성일</strong>: 2026년 1월 24일  
+<strong>작성자</strong>: AI Assistant  
+<strong>버전</strong>: 2.0 (부트캠프 발표용 강화 버전)  
+<strong>대상</strong>: 부트캠프 최종 프로젝트 발표
+</p>
+</body>
+</html>

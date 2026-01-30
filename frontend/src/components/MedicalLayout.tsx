@@ -8,6 +8,8 @@ import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
+import FloatingChat from "@/components/FloatingChat";
+import "./FloatingChat.css";
 
 interface MedicalLayoutProps {
     children: React.ReactNode;
@@ -59,25 +61,25 @@ export default function MedicalLayout({ children, isSidebarOpen, setIsSidebarOpe
             {/* Top Header */}
             <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-30">
                 <div className="flex items-center justify-between px-8 py-4">
-                    <button 
+                    <button
                         onClick={() => setIsSidebarOpen(!isSidebarOpen)}
                         className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                     >
                         {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                     </button>
 
-                        <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-4">
                         {/* Quick Search */}
-                            <div className="hidden md:flex relative group">
-                                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
-                                    <Activity className="h-4 w-4 text-gray-400" />
-                                </div>
-                                <input
-                                    type="text"
-                                    placeholder="빠른 환자 검색..."
-                                className="bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-4 text-xs w-64 focus:ring-2 focus:ring-primary/20 transition-all"
-                                />
+                        <div className="hidden md:flex relative group">
+                            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                                <Activity className="h-4 w-4 text-gray-400" />
                             </div>
+                            <input
+                                type="text"
+                                placeholder="빠른 환자 검색..."
+                                className="bg-slate-100 dark:bg-slate-800 border-none rounded-full py-2 pl-10 pr-4 text-xs w-64 focus:ring-2 focus:ring-primary/20 transition-all"
+                            />
+                        </div>
 
                         {/* Notifications */}
                         <NotificationBell />
@@ -91,7 +93,7 @@ export default function MedicalLayout({ children, isSidebarOpen, setIsSidebarOpe
                                 <p className={cn("text-xs font-semibold px-2 py-0.5 rounded-full w-fit", getRoleBadgeColor(user?.role || ''))}>
                                     {getRoleLabel(user?.role || '')}
                                 </p>
-                                </div>
+                            </div>
                             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-accent text-white flex items-center justify-center flex-shrink-0">
                                 <User className="w-5 h-5" />
                             </div>
@@ -153,11 +155,11 @@ export default function MedicalLayout({ children, isSidebarOpen, setIsSidebarOpe
                     </div>
                 )}
 
-                {/* Page Content */}
                 <div className="animate-in fade-in duration-500">
                     {children}
                 </div>
             </div>
+            <FloatingChat />
         </div>
     );
 }

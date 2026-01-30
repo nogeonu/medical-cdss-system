@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { loginApi, meApi, logoutApi } from '@/lib/api';
+import { loginApi, meApi, logoutApi, getPatientsApi } from '@/lib/api';
 
 export type User = {
   id: number;
@@ -18,6 +18,7 @@ export type PatientUser = {
   name: string;
   email: string;
   phone: string;
+  patient_pk?: number | null;
 };
 
 type AuthContextType = {
@@ -40,6 +41,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const init = async () => {
+      const pathname = window.location.pathname;
+      const isPatientRoute = pathname.startsWith('/patient');
+      const isPublicRoute = ['/', '/index.html', '/login', '/signup', '/app-download'].includes(pathname);
+      if (isPatientRoute || isPublicRoute) {
+        setLoading(false);
+        return;
+      }
+
       try {
         const me = await meApi();
         setUser(me);
@@ -62,6 +71,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPatientUserState(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (!patientUser?.patient_id || patientUser.patient_pk != null) return;
+    let cancelled = false;
+
+    const parsePatientPk = (data: unknown): number | null => {
+      if (Array.isArray(data) && data.length > 0) {
+        const first = data[0] as { id?: unknown };
+        return typeof first?.id === 'number' ? first.id : null;
+      }
+      if (data && typeof data === 'object') {
+        const results = (data as { results?: unknown }).results;
+        if (Array.isArray(results) && results.length > 0) {
+          const first = results[0] as { id?: unknown };
+          return typeof first?.id === 'number' ? first.id : null;
+        }
+      }
+      return null;
+    };
+
+    const fetchPatientPk = async () => {
+      try {
+        const list = await getPatientsApi({ search: patientUser.patient_id });
+        const patientPk = parsePatientPk(list);
+        if (cancelled || patientPk == null) return;
+        const updatedPatient: PatientUser = {
+          ...patientUser,
+          patient_pk: patientPk,
+        };
+        setPatientUserState(updatedPatient);
+        try {
+          localStorage.setItem(PATIENT_USER_STORAGE_KEY, JSON.stringify(updatedPatient));
+        } catch {
+          // ignore storage errors
+        }
+      } catch {
+        // ignore patient list errors
+      }
+    };
+
+    fetchPatientPk();
+    return () => {
+      cancelled = true;
+    };
+  }, [patientUser?.patient_id, patientUser?.patient_pk]);
 
   const setPatientUser = React.useCallback((patient: PatientUser | null) => {
     setPatientUserState(patient);

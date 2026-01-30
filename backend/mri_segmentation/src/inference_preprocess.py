@@ -110,8 +110,38 @@ def preprocess_single_case(image_path, num_sequences=4):
     data = {"image": image_input}
     preprocessed = transforms(data)
     
-    # Ensure we have the right number of sequences
+    # CRITICAL: pixdim 명시적 저장 (Invertd 성공을 위해)
+    # Spacingd 적용 후 MetaTensor에 spacing은 있지만 pixdim이 없을 수 있음
+    from monai.data import MetaTensor
     image = preprocessed["image"]
+    
+    if isinstance(image, MetaTensor):
+        original_spacing = image.meta.get("spacing", None)
+        if original_spacing is not None and "pixdim" not in image.meta:
+            # spacing을 pixdim 형식으로 변환하여 저장
+            # NIfTI pixdim 형식: [1.0, x, y, z, ...]
+            if hasattr(original_spacing, 'tolist'):
+                spacing_list = original_spacing.tolist()
+            elif hasattr(original_spacing, '__iter__') and not isinstance(original_spacing, str):
+                spacing_list = list(original_spacing)
+            else:
+                spacing_list = [original_spacing]
+            
+            # 최소 3개 요소 확보 (x, y, z)
+            if len(spacing_list) >= 3:
+                # NIfTI pixdim 형식: [1.0, x, y, z]
+                pixdim = np.array([1.0] + spacing_list[:3], dtype=np.float32)
+                image.meta["pixdim"] = pixdim
+                # image_meta_dict에도 저장 (postprocess_prediction에서 사용)
+                if "image_meta_dict" not in preprocessed:
+                    preprocessed["image_meta_dict"] = {}
+                preprocessed["image_meta_dict"]["pixdim"] = pixdim
+                preprocessed["image_meta_dict"]["spacing"] = original_spacing
+                if "spatial_shape" in image.meta:
+                    preprocessed["image_meta_dict"]["spatial_shape"] = image.meta["spatial_shape"]
+                print(f"  DEBUG: pixdim 저장 완료: {pixdim}")
+    
+    # Ensure we have the right number of sequences
     if image.shape[0] > num_sequences:
         image = image[:num_sequences]
     elif image.shape[0] < num_sequences:
