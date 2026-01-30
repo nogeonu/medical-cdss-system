@@ -197,7 +197,7 @@ export default function PatientDoctors() {
 
     setSubmitting(true);
     try {
-      // 날짜와 시간을 결합하여 Date 객체 생성
+      // 날짜와 시간을 결합하여 Date 객체 생성 (로컬 시간 유지)
       const [hours, minutes] = appointmentTime.split(":").map(Number);
       const startDate = new Date(appointmentDate);
       startDate.setHours(hours, minutes, 0, 0);
@@ -206,9 +206,18 @@ export default function PatientDoctors() {
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + 30);
       
-      // ISO 8601 형식으로 변환 (YYYY-MM-DDTHH:mm:ss)
-      const startDateTime = startDate.toISOString().slice(0, 19);
-      const endDateTime = endDate.toISOString().slice(0, 19);
+      // 서버(Asia/Seoul, USE_TZ=False)에 맞게 로컬 시간 문자열로 전송 (toISOString 사용 시 UTC로 바뀌어 9시간 어긋남)
+      const toLocalISO = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, "0");
+        const day = String(d.getDate()).padStart(2, "0");
+        const h = String(d.getHours()).padStart(2, "0");
+        const min = String(d.getMinutes()).padStart(2, "0");
+        const s = String(d.getSeconds()).padStart(2, "0");
+        return `${y}-${m}-${day}T${h}:${min}:${s}`;
+      };
+      const startDateTime = toLocalISO(startDate);
+      const endDateTime = toLocalISO(endDate);
 
       const appointmentData = {
         title: appointmentTitle.trim() || `${getDisplayName(selectedDoctor)} 의사 진료 예약`,
