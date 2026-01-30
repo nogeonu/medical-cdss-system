@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +51,9 @@ interface Order {
   pathology_analysis?: PathologyAnalysis;
 }
 
+// 다른 페이지 갔다 와도 로딩 유지: sessionStorage 키
+const PATHOLOGY_PENDING_KEY = 'pathology_pending_request';
+
 // 교육원 워커 wsi/ 폴더에 있는 사용 가능한 파일 목록
 const AVAILABLE_WSI_FILES = [
   { value: 'tumor_083.tif', label: 'tumor_083.tif (종양)' },
@@ -69,10 +72,44 @@ export default function PathologyAnalysis() {
   const [selectedFilename, setSelectedFilename] = useState<string>('tumor_083.tif'); // 기본값
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null); // 진행 중인 요청 ID
   const [analysisResult, setAnalysisResult] = useState<any>(null); // 분석 결과
+  const restoredPendingRef = useRef(false); // 다른 페이지 갔다 와서 복원했는지 (중복 복원 방지)
+  const pollingCleanupRef = useRef<(() => void) | null>(null); // 폴링 취소 함수 (다른 페이지 갈 때 정리)
 
   useEffect(() => {
     loadOrders();
   }, []);
+
+  // 다른 페이지 갔다 와도 로딩 유지: sessionStorage에 저장된 진행 중 요청 복원 후 폴링 재개
+  useEffect(() => {
+    if (orders.length === 0 || restoredPendingRef.current) return;
+    const raw = sessionStorage.getItem(PATHOLOGY_PENDING_KEY);
+    if (!raw) return;
+    try {
+      const { requestId, orderId, filename } = JSON.parse(raw) as { requestId: string; orderId: string; filename: string };
+      let order = orders.find((o) => o.id === orderId);
+      if (!order) {
+        getOrderApi(orderId)
+          .then((ord) => {
+            restoredPendingRef.current = true;
+            setSelectedOrder(ord);
+            setSelectedFilename(filename || 'tumor_083.tif');
+            setPendingRequestId(requestId);
+            setAnalysisResult(null);
+            pollingCleanupRef.current = startPollingResult(requestId, ord, filename || 'tumor_083.tif');
+          })
+          .catch(() => sessionStorage.removeItem(PATHOLOGY_PENDING_KEY));
+        return;
+      }
+      restoredPendingRef.current = true;
+      setSelectedOrder(order);
+      setSelectedFilename(filename || 'tumor_083.tif');
+      setPendingRequestId(requestId);
+      setAnalysisResult(null);
+      pollingCleanupRef.current = startPollingResult(requestId, order, filename || 'tumor_083.tif');
+    } catch {
+      sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+    }
+  }, [orders]);
 
   // 주문 선택 시 저장된 분석 결과 불러오기
   useEffect(() => {
@@ -121,6 +158,8 @@ export default function PathologyAnalysis() {
     const poll = async () => {
       if (isCancelled || attempts >= maxAttempts) {
         if (attempts >= maxAttempts && !isCancelled) {
+          sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+          pollingCleanupRef.current = null;
           toast({
             title: "분석 시간 초과",
             description: "분석이 50분을 초과했습니다. 나중에 다시 확인해주세요.",
@@ -153,6 +192,8 @@ export default function PathologyAnalysis() {
         };
         
         if (data.status === 'completed' && data.result) {
+          sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+          pollingCleanupRef.current = null;
           setAnalysisResult(data.result);
           setPendingRequestId(null);
           
@@ -216,6 +257,8 @@ export default function PathologyAnalysis() {
           // 주문 목록 새로고침
           loadOrders();
         } else if (data.status === 'failed') {
+          sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+          pollingCleanupRef.current = null;
           setPendingRequestId(null);
           toast({
             title: "분석 실패",
@@ -250,11 +293,13 @@ export default function PathologyAnalysis() {
     };
   };
   
-  // 컴포넌트 언마운트 시 폴링 정리
+  // 다른 페이지로 나갈 때 폴링만 중지 (sessionStorage는 유지 → 돌아오면 복원)
   useEffect(() => {
     return () => {
-      // 컴포넌트 언마운트 시 폴링 중지
-      setPendingRequestId(null);
+      if (pollingCleanupRef.current) {
+        pollingCleanupRef.current();
+        pollingCleanupRef.current = null;
+      }
     };
   }, []);
 
@@ -353,8 +398,16 @@ export default function PathologyAnalysis() {
         throw new Error(data.error || `서버 오류 (${response.status})`);
       }
 
-      // request_id 저장하고 폴링 시작
+      // request_id 저장하고 폴링 시작 (다른 페이지 갔다 와도 로딩 유지용 sessionStorage 저장)
       if (data.request_id) {
+        sessionStorage.setItem(
+          PATHOLOGY_PENDING_KEY,
+          JSON.stringify({
+            requestId: data.request_id,
+            orderId: selectedOrder.id,
+            filename: selectedFilename,
+          })
+        );
         setPendingRequestId(data.request_id);
         setAnalysisResult(null);
         
@@ -372,7 +425,7 @@ export default function PathologyAnalysis() {
           });
           return;
         }
-        startPollingResult(data.request_id, selectedOrder, selectedFilename);
+        pollingCleanupRef.current = startPollingResult(data.request_id, selectedOrder, selectedFilename);
       } else {
         toast({
           title: "분석 요청 완료",
