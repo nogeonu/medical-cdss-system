@@ -1,8 +1,6 @@
 """
 OCS Serializers
 """
-import os
-from django.conf import settings
 from rest_framework import serializers
 from .models import Order, OrderStatusHistory, DrugInteractionCheck, AllergyCheck, Notification, ImagingAnalysisResult, LabTestResult, PathologyAnalysisResult
 from patients.models import Patient
@@ -498,8 +496,7 @@ class PathologyAnalysisResultSerializer(serializers.ModelSerializer):
     analyzed_by_name = serializers.CharField(source='analyzed_by.get_full_name', read_only=True)
     order_patient_name = serializers.CharField(source='order.patient.name', read_only=True)
     order_patient_id = serializers.CharField(source='order.patient.patient_id', read_only=True)
-    image_url = serializers.SerializerMethodField()
-
+    
     class Meta:
         model = PathologyAnalysisResult
         fields = [
@@ -510,32 +507,6 @@ class PathologyAnalysisResultSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
-
-    def get_image_url(self, obj):
-        """파일이 실제로 존재할 때만 image_url 반환 (404 방지). mask 없으면 overlay 시도."""
-        raw_url = (obj.image_url or '').strip()
-        if not raw_url:
-            return ''
-        media_url = (getattr(settings, 'MEDIA_URL', '/media/') or '/media/').rstrip('/')
-        # 상대 경로 추출: /media/... 또는 http(s)://host/media/...
-        if raw_url.startswith(media_url):
-            relative = raw_url[len(media_url):].lstrip('/').replace('\\', '/')
-        elif raw_url.startswith('/media/'):
-            relative = raw_url[len('/media/'):].lstrip('/').replace('\\', '/')
-        elif '/media/' in raw_url:
-            relative = raw_url.split('/media/')[-1].lstrip('/').replace('\\', '/')
-        else:
-            return raw_url
-        full_path = os.path.join(settings.MEDIA_ROOT, relative).replace('\\', os.sep)
-        if os.path.isfile(full_path):
-            return raw_url
-        # _mask.png 없으면 _overlay.png 시도
-        if '_mask.png' in relative or relative.endswith('_mask.png'):
-            alt_relative = relative.replace('_mask.png', '_overlay.png')
-            alt_path = os.path.join(settings.MEDIA_ROOT, alt_relative).replace('\\', os.sep)
-            if os.path.isfile(alt_path):
-                return f"{media_url}/{alt_relative}".replace('//', '/')
-        return ''
 
 
 class PathologyAnalysisResultCreateSerializer(serializers.ModelSerializer):
