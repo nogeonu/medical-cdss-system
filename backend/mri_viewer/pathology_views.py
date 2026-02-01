@@ -933,29 +933,55 @@ PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS = os.getenv(
 ).strip().lower().split(',')
 
 
+def _pathology_dzi_proxy_fetch(target_url):
+    """DZI 프록시: target_url로 요청 후 응답 반환 (HttpResponse 또는 None)."""
+    from django.http import HttpResponse
+    headers = {
+        'User-Agent': 'Django-DZI-Proxy',
+        'ngrok-skip-browser-warning': 'true',
+    }
+    try:
+        resp = requests.get(target_url, headers=headers, timeout=30)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning(f"DZI 프록시 업스트림 요청 실패: {target_url[:80]} - {e}")
+        return None
+    content_type = resp.headers.get('Content-Type', 'application/octet-stream').split(';')[0].strip()
+    response = HttpResponse(resp.content, content_type=content_type)
+    if 'Cache-Control' not in resp.headers:
+        response['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
 @api_view(['GET'])
 @authentication_classes([CSRFExemptSessionAuthentication])
 @permission_classes([AllowAny])
-def pathology_dzi_proxy(request):
+def pathology_dzi_proxy(request, encoded_path=None):
     """
     DZI 메타데이터 및 타일 프록시.
     검사실 브라우저 → Django → 워커(ngrok) 요청 시 ngrok-skip-browser-warning 헤더를 포함합니다.
 
-    GET ?url=<encoded_full_url>
-    예: /api/mri/pathology/dzi-proxy/?url=https%3A%2F%2Fxxx.ngrok-free.app%2Fdzi%2Ftumor.dzi
+    - 경로 기반 (OpenSeadragon 타일 URL 호환): GET /api/mri/pathology/dzi-proxy/<encoded_full_url>
+      예: .../dzi-proxy/https%3A%2F%2Fxxx.ngrok.app%2Fdzi%2Ftumor.dzi
+      타일: .../dzi-proxy/https%3A%2F%2Fxxx.ngrok.app%2Fdzi%2Ftumor_files/0/0_0.jpeg
+    - 쿼리 기반: GET ?url=<encoded_full_url>
     """
     from django.http import HttpResponse
-    from urllib.parse import urlparse
+    from urllib.parse import urlparse, unquote
 
-    url_raw = request.GET.get('url', '').strip()
-    if not url_raw:
-        return Response({'error': 'url 쿼리 파라미터가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        from urllib.parse import unquote
-        target_url = unquote(url_raw)
-    except Exception:
-        target_url = url_raw
+    if encoded_path and encoded_path.strip():
+        try:
+            target_url = unquote(encoded_path)
+        except Exception:
+            target_url = encoded_path
+    else:
+        url_raw = request.GET.get('url', '').strip()
+        if not url_raw:
+            return Response({'error': 'url 쿼리 파라미터가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target_url = unquote(url_raw)
+        except Exception:
+            target_url = url_raw
 
     if not target_url.startswith('http://') and not target_url.startswith('https://'):
         return Response({'error': 'url은 http 또는 https여야 합니다.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -978,23 +1004,10 @@ def pathology_dzi_proxy(request):
         logger.warning(f"DZI 프록시 URL 파싱 실패: {e}")
         return Response({'error': 'url 형식이 올바르지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
 
-    headers = {
-        'User-Agent': request.META.get('HTTP_USER_AGENT', 'Django-DZI-Proxy'),
-        'ngrok-skip-browser-warning': 'true',
-    }
-    try:
-        resp = requests.get(target_url, headers=headers, timeout=30)
-        resp.raise_for_status()
-    except requests.RequestException as e:
-        logger.warning(f"DZI 프록시 업스트림 요청 실패: {target_url[:80]} - {e}")
+    response = _pathology_dzi_proxy_fetch(target_url)
+    if response is None:
         return Response(
             {'error': '워커 DZI 서버에 연결할 수 없습니다. 워커 PC와 ngrok을 확인하세요.'},
             status=status.HTTP_502_BAD_GATEWAY
         )
-
-    content_type = resp.headers.get('Content-Type', 'application/octet-stream').split(';')[0].strip()
-    response = HttpResponse(resp.content, content_type=content_type)
-    # 캐시 허용 (타일은 변경되지 않음)
-    if 'Cache-Control' not in resp.headers:
-        response['Cache-Control'] = 'public, max-age=3600'
     return response

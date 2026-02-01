@@ -14,13 +14,16 @@ import { AlertCircle, Loader2 } from 'lucide-react';
 
 const DZI_PROXY_PATH = '/api/mri/pathology/dzi-proxy/';
 
-/** 외부 URL(ngrok 등)이면 Django DZI 프록시 URL로 변환 */
+/**
+ * 외부 URL(ngrok 등)이면 Django DZI 프록시 URL로 변환.
+ * 경로 기반 사용 시 OpenSeadragon이 .dzi → _files/level/col_row.jpeg 로 타일 URL을 올바르게 만듦.
+ */
 function getEffectiveDziUrl(rawUrl: string): string {
   const url = (rawUrl || '').trim();
   if (!url) return '';
   if (url.startsWith('http://') || url.startsWith('https://')) {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    return `${origin}${DZI_PROXY_PATH}?url=${encodeURIComponent(url)}`;
+    return `${origin}${DZI_PROXY_PATH}${encodeURIComponent(url)}`;
   }
   return url;
 }
