@@ -44,8 +44,8 @@ dzi_url: "https://abcd1234.ngrok-free.app/dzi/tumor_076.tif.dzi"
 
 ## 2. CORS 설정
 
-- DZI 타일은 **Django DZI 프록시**를 통해 요청하므로, 브라우저→워커 직접 요청이 아님
-- 워커는 **Django 서버(백엔드)**에서 오는 요청만 받으면 됨 (서버→서버이므로 CORS 불필요)
+- DZI 타일은 **Django DZI 프록시**를 통해 요청하므로, 기본적으로 브라우저→워커 직접 요청은 아님
+- **워커 DZI 서버에도 CORS 설정 필요**: 브라우저가 워커로 직접 요청하는 경우를 대비해 워커 쪽 CORS(예: `allow_origins=["*"]`)를 설정해 두는 것이 좋음 (dzi_server.py에 이미 설정되어 있으면 문제없음)
 
 ---
 

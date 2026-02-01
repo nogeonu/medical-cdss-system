@@ -6,15 +6,19 @@
 
 ## 동작 방식
 
-1. **브라우저** → Django 서버: `GET /api/mri/pathology/dzi-proxy/?url=<encoded_ngrok_dzi_url>`
-2. **Django** → 워커(ngrok): 동일 URL로 요청 시 **`ngrok-skip-browser-warning: true` 헤더 포함**
-3. Django가 응답( DZI XML 또는 타일 이미지 )을 그대로 브라우저에 전달
+1. **브라우저** → Django 서버: `GET /api/mri/pathology/dzi-proxy/<encoded_ngrok_url>` (경로 기반)
+2. **Django** → 워커(ngrok): 디코딩한 URL로 요청 시 **`ngrok-skip-browser-warning: true` 헤더 포함**
+3. Django가 응답(DZI XML 또는 타일 이미지)을 그대로 브라우저에 전달
 
 ---
 
-## 구현 내용
+## 구현 내용 (경로 기반)
 
-- **엔드포인트**: `GET /api/mri/pathology/dzi-proxy/?url=<encoded_full_url>`
+- **DZI 메타**: `GET /api/mri/pathology/dzi-proxy/<encoded_full_dzi_url>`  
+  예: `.../dzi-proxy/https%3A%2F%2Fxxx.ngrok.app%2Fdzi%2Ftumor.dzi`
+- **타일**: `GET /api/mri/pathology/dzi-proxy/<encoded_full_tile_url>`  
+  예: `.../dzi-proxy/https%3A%2F%2Fxxx.ngrok.app%2Fdzi%2Ftumor_files%2F0%2F0_0.jpeg`
+- **쿼리 방식(호환)**: `GET /api/mri/pathology/dzi-proxy/?url=<encoded_full_url>`
 - **헤더**: Django가 ngrok으로 요청할 때 `ngrok-skip-browser-warning: true` 포함
 - **보안**: `PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS` 환경 변수로 프록시 허용 호스트 제한 (기본: `ngrok-free.app`, `ngrok.io`, `ngrok.app`)
 

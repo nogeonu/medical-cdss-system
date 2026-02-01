@@ -929,7 +929,7 @@ def sync_pathology_image_from_worker(request):
 # DZI 프록시 허용 호스트 (보안: ngrok 등만 허용)
 PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS = os.getenv(
     'PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS',
-    'ngrok-free.app,ngrok.io,ngrok.app'
+    'ngrok-free.app,ngrok-free.dev,ngrok.io,ngrok.app'
 ).strip().lower().split(',')
 
 
