@@ -56,10 +56,15 @@ export default function PathologyHighResViewer({
     setLoadError(null);
     setLoading(true);
 
+    // 디버그: 고해상도 뷰어에서 사용하는 URL (브라우저 콘솔에서 확인)
+    console.log('[고해상도 뷰어] raw dziUrl:', dziUrl);
+    console.log('[고해상도 뷰어] effectiveDziUrl (프록시):', effectiveDziUrl);
+
     let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // 로딩 타임아웃: open/open-failed가 안 오면 15초 후 로딩 해제 + 안내
     loadTimeoutId = setTimeout(() => {
+      console.warn('[고해상도 뷰어] 15초 타임아웃 — open/open-failed 미발생. Network 탭에서 dzi-proxy 요청 상태 확인.');
       setLoading(false);
       setLoadError((prev) =>
         prev
@@ -88,12 +93,14 @@ export default function PathologyHighResViewer({
 
         const osd = viewer as unknown as { addHandler: (name: string, fn: () => void) => void };
         osd.addHandler('open-failed', () => {
+          console.error('[고해상도 뷰어] open-failed — DZI/타일 로드 실패. Network 탭에서 실패한 dzi-proxy 요청 확인.');
           if (loadTimeoutId) clearTimeout(loadTimeoutId);
           loadTimeoutId = null;
           setLoading(false);
           setLoadError('이미지를 불러올 수 없습니다. 워커 PC가 켜져 있는지, DZI 주소가 맞는지 확인해 주세요.');
         });
         osd.addHandler('open', () => {
+          console.log('[고해상도 뷰어] open — DZI 로드 성공');
           if (loadTimeoutId) clearTimeout(loadTimeoutId);
           loadTimeoutId = null;
           setLoading(false);

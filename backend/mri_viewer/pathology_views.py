@@ -974,6 +974,7 @@ def pathology_dzi_proxy(request, encoded_path=None):
             target_url = unquote(encoded_path)
         except Exception:
             target_url = encoded_path
+        logger.info(f"DZI 프록시 요청 (경로): target_host={urlparse(target_url).hostname if target_url else None}")
     else:
         url_raw = request.GET.get('url', '').strip()
         if not url_raw:
@@ -995,7 +996,7 @@ def pathology_dzi_proxy(request, encoded_path=None):
             if a.strip()
         )
         if not allowed:
-            logger.warning(f"DZI 프록시 허용되지 않은 호스트: {host}")
+            logger.warning(f"DZI 프록시 허용되지 않은 호스트: host={host}, allowed={PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS}")
             return Response(
                 {'error': f'허용되지 않은 호스트입니다. PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS를 확인하세요.'},
                 status=status.HTTP_403_FORBIDDEN
@@ -1006,8 +1007,10 @@ def pathology_dzi_proxy(request, encoded_path=None):
 
     response = _pathology_dzi_proxy_fetch(target_url)
     if response is None:
+        logger.warning(f"DZI 프록시 업스트림 실패 (502): target={target_url[:100]}...")
         return Response(
             {'error': '워커 DZI 서버에 연결할 수 없습니다. 워커 PC와 ngrok을 확인하세요.'},
             status=status.HTTP_502_BAD_GATEWAY
         )
+    logger.info(f"DZI 프록시 성공: target_host={parsed.hostname}")
     return response
