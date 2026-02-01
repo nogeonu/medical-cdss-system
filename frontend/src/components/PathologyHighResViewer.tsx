@@ -51,7 +51,7 @@ export default function PathologyHighResViewer({
   const effectiveDziUrl = useMemo(() => getEffectiveDziUrl(dziUrl), [dziUrl]);
 
   useEffect(() => {
-    if (!open || !containerRef.current || !effectiveDziUrl) return;
+    if (!open || !effectiveDziUrl) return;
 
     setLoadError(null);
     setLoading(true);
@@ -62,20 +62,20 @@ export default function PathologyHighResViewer({
 
     let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
-    // 로딩 타임아웃: open/open-failed가 안 오면 15초 후 로딩 해제 + 안내
+    // 로딩 타임아웃: open/open-failed가 안 오면 8초 후 로딩 해제 + 안내 (컨테이너가 늦게 붙어도 타임아웃은 항상 동작)
     loadTimeoutId = setTimeout(() => {
-      console.warn('[고해상도 뷰어] 15초 타임아웃 — open/open-failed 미발생. Network 탭에서 dzi-proxy 요청 상태 확인.');
+      console.warn('[고해상도 뷰어] 8초 타임아웃 — open/open-failed 미발생. Network 탭에서 dzi-proxy 요청 상태 확인.');
       setLoading(false);
       setLoadError((prev) =>
         prev
           ? prev
           : '로딩 시간이 초과되었습니다. 서버 DZI 프록시와 워커 PC를 확인해 주세요.'
       );
-    }, 15000);
+    }, 8000);
 
     // 다이얼로그 레이아웃 완료 후 뷰어 초기화 (컨테이너 크기 확보)
     const timer = setTimeout(() => {
-      if (!containerRef.current) return;
+      if (!containerRef.current) return; // 컨테이너 없으면 뷰어만 스킵, 위 8초 타임아웃으로 안내
       try {
         const viewer = OpenSeadragon({
           element: containerRef.current,

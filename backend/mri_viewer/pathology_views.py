@@ -1022,6 +1022,10 @@ def pathology_dzi_proxy(request, encoded_path=None):
             target_url = unquote(encoded_path)
         except Exception:
             target_url = encoded_path
+        # OpenSeadragon은 base.dzi + "_files/level/col_row.jpeg" 로 타일 요청함.
+        # 워커는 base_files/... ( .dzi 없음 ) 형식이므로 변환.
+        if '.dzi_files' in target_url or '.dzi_files/' in target_url:
+            target_url = target_url.replace('.dzi_files', '_files', 1)
         logger.info(f"DZI 프록시 요청 (경로): target_host={urlparse(target_url).hostname if target_url else None}")
     else:
         url_raw = request.GET.get('url', '').strip()

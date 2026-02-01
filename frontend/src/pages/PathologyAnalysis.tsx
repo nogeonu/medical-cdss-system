@@ -698,7 +698,7 @@ export default function PathologyAnalysis() {
                               결과 이미지 보기
                             </a>
                           )}
-                          {(analysisResult.dzi_url || analysisResult.viewer_url) && (
+                          {analysisResult.dzi_url && (
                             <button
                               type="button"
                               onClick={() => setShowHighResViewer(true)}
@@ -774,7 +774,7 @@ export default function PathologyAnalysis() {
       <PathologyHighResViewer
         open={showHighResViewer}
         onOpenChange={setShowHighResViewer}
-        dziUrl={analysisResult?.dzi_url || analysisResult?.viewer_url || ''}
+        dziUrl={analysisResult?.dzi_url ?? ''}
         title={`고해상도 뷰어 - ${selectedOrder?.patient_name || ''}`}
       />
     </div>
