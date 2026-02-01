@@ -804,6 +804,10 @@ def save_pathology_result(request):
                     image_url = request.data.get('image_url', '')  # 실패 시 원본 URL 유지
                 logger.warning("⚠️ 이미지 처리 실패했지만 분석 결과는 저장합니다.")
         
+        # 고해상도 뷰어용 URL 받기 (워커 PC가 제공)
+        dzi_url = request.data.get('dzi_url', '')
+        viewer_url = request.data.get('viewer_url', '')
+        
         # 이미 분석 결과가 있으면 업데이트, 없으면 생성 (image_url = 우리 서버 경로로 저장됨)
         pathology_analysis, created = PathologyAnalysisResult.objects.update_or_create(
             order=order,
@@ -815,6 +819,8 @@ def save_pathology_result(request):
                 'probabilities': request.data.get('probabilities', {}),
                 'filename': request.data.get('filename', ''),
                 'image_url': image_url,
+                'dzi_url': dzi_url,  # 고해상도 뷰어용 DZI URL
+                'viewer_url': viewer_url,  # 대체 뷰어 URL
                 'findings': request.data.get('findings', ''),
                 'recommendations': request.data.get('recommendations', ''),
             }

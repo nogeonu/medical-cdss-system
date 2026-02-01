@@ -34,6 +34,8 @@ interface PathologyAnalysis {
   probabilities: Record<string, number>;
   filename: string;
   image_url?: string;
+  dzi_url?: string;  // 고해상도 뷰어용 DZI URL
+  viewer_url?: string;  // 대체 뷰어 URL
   findings?: string;
   recommendations?: string;
   created_at: string;
@@ -191,6 +193,8 @@ export default function PathologyAnalysis() {
             confidence: number;
             probabilities: Record<string, number>;
             image_url?: string;
+            dzi_url?: string;
+            viewer_url?: string;
           };
           error?: string;
         };
@@ -224,6 +228,8 @@ export default function PathologyAnalysis() {
                   probabilities: data.result.probabilities,
                   filename: filename,
                   image_url: data.result.image_url || '',
+                  dzi_url: data.result.dzi_url || '',  // 고해상도 뷰어용 DZI URL 저장
+                  viewer_url: data.result.viewer_url || '',  // 대체 뷰어 URL 저장
                   findings: data.result.class_name === 'Tumor' ? '종양 조직이 관찰되었습니다.' : '정상 조직입니다.',
                   recommendations: data.result.class_name === 'Tumor' ? '추가 검사 및 치료 계획 수립이 필요합니다.' : '정기 검진을 권장합니다.',
                 }),

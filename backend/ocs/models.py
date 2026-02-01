@@ -327,6 +327,10 @@ class PathologyAnalysisResult(models.Model):
     filename = models.CharField(max_length=500, verbose_name='파일명')
     image_url = models.TextField(blank=True, verbose_name='이미지 URL')
     
+    # 고해상도 뷰어용 URL (워커 PC 제공)
+    dzi_url = models.TextField(blank=True, verbose_name='DZI 메타데이터 URL')  # OpenSeadragon용
+    viewer_url = models.TextField(blank=True, verbose_name='뷰어 URL')  # 대체 뷰어 URL
+    
     # 추가 소견
     findings = models.TextField(blank=True, verbose_name='소견')
     recommendations = models.TextField(blank=True, verbose_name='권고사항')
