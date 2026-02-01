@@ -18,10 +18,12 @@ import {
   Search,
   User,
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  ZoomIn
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOrdersApi, getOrderApi } from '@/lib/api';
+import PathologyHighResViewer from '@/components/PathologyHighResViewer';
 
 interface PathologyAnalysis {
   id: string;
@@ -72,6 +74,7 @@ export default function PathologyAnalysis() {
   const [selectedFilename, setSelectedFilename] = useState<string>('tumor_083.tif'); // 기본값
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null); // 진행 중인 요청 ID
   const [analysisResult, setAnalysisResult] = useState<any>(null); // 분석 결과
+  const [showHighResViewer, setShowHighResViewer] = useState(false); // 고해상도 뷰어 모달
   const restoredPendingRef = useRef(false); // 다른 페이지 갔다 와서 복원했는지 (중복 복원 방지)
   const pollingCleanupRef = useRef<(() => void) | null>(null); // 폴링 취소 함수 (다른 페이지 갈 때 정리)
 
@@ -656,27 +659,39 @@ export default function PathologyAnalysis() {
                         </span>
                       </div>
                     )}
-                    {analysisResult.image_url && (
+                    {(analysisResult.image_url || analysisResult.viewer_url || analysisResult.dzi_url) && (
                       <div className="mt-3 pt-3 border-t border-green-200">
                         <p className="font-semibold text-gray-700 mb-2">결과 이미지:</p>
-                        <div className="flex gap-2">
-                          <a 
-                            href={analysisResult.image_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                          >
-                            <Scan className="h-4 w-4" />
-                            결과 이미지 보기
-                          </a>
-                          {analysisResult.viewer_url && (
+                        <div className="flex flex-wrap gap-2">
+                          {analysisResult.image_url && (
+                            <a 
+                              href={analysisResult.image_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                            >
+                              <Scan className="h-4 w-4" />
+                              결과 이미지 보기
+                            </a>
+                          )}
+                          {(analysisResult.dzi_url || analysisResult.viewer_url) && (
+                            <button
+                              type="button"
+                              onClick={() => setShowHighResViewer(true)}
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            >
+                              <ZoomIn className="h-4 w-4" />
+                              고해상도 뷰어 (원본 TIF 확대)
+                            </button>
+                          )}
+                          {analysisResult.viewer_url && !analysisResult.dzi_url && (
                             <a 
                               href={analysisResult.viewer_url} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition-colors"
                             >
-                              뷰어에서 보기
+                              새 탭에서 뷰어 열기
                             </a>
                           )}
                         </div>
@@ -717,6 +732,14 @@ export default function PathologyAnalysis() {
           </CardContent>
         </Card>
       )}
+
+      {/* 고해상도 뷰어 모달 (OpenSeadragon + DZI) */}
+      <PathologyHighResViewer
+        open={showHighResViewer}
+        onOpenChange={setShowHighResViewer}
+        dziUrl={analysisResult?.dzi_url || analysisResult?.viewer_url || ''}
+        title={`고해상도 뷰어 - ${selectedOrder?.patient_name || ''}`}
+      />
     </div>
   );
 }

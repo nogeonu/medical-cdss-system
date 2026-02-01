@@ -227,6 +227,7 @@ def get_analysis_result(request, request_id):
                 'elapsed_time_seconds': result.get('elapsed_time_seconds'),
                 'image_url': result.get('image_url'),
                 'viewer_url': result.get('viewer_url'),
+                'dzi_url': result.get('dzi_url'),  # OpenSeadragon용 DZI 메타데이터 URL (없으면 viewer_url 사용)
             }
         elif data.get('status') == 'failed':
             result = data.get('result', {})
@@ -357,6 +358,7 @@ def complete_task(request):
     - num_patches: 분석한 패치 개수 (선택)
     - top_attention_patches: 상위 attention 패치 인덱스 배열 (선택)
     - viewer_url: 뷰어 URL (선택)
+    - dzi_url: OpenSeadragon용 DZI 메타데이터 URL (선택, 없으면 viewer_url 사용)
     
     이미지 파일 (Tumor 판정 시만):
     - {task_id}_overlay.png (우선) 또는 {task_id}_mask.png
@@ -375,6 +377,7 @@ def complete_task(request):
             num_patches = request.data.get('num_patches', 0)
             top_attention_patches = request.data.get('top_attention_patches', [])
             viewer_url = request.data.get('viewer_url', '')
+            dzi_url = request.data.get('dzi_url', '')
             
             # 이미지 파일 처리 (Tumor 판정 시만)
             image_file = None
@@ -415,6 +418,7 @@ def complete_task(request):
             num_patches = request.data.get('num_patches', 0)
             top_attention_patches = request.data.get('top_attention_patches', [])
             viewer_url = request.data.get('viewer_url', '')
+            dzi_url = request.data.get('dzi_url', '')
             image_file = None
             image_filename = None
         
@@ -476,6 +480,7 @@ def complete_task(request):
             'num_patches': num_patches,
             'top_attention_patches': top_attention_patches,
             'viewer_url': viewer_url if viewer_url else None,
+            'dzi_url': dzi_url if dzi_url else None,  # OpenSeadragon용 (없으면 viewer_url 사용)
             'image_url': image_url  # 이미지 URL 추가
         }
         d['completed_at'] = timezone.now().isoformat()
