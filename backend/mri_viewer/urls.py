@@ -56,6 +56,7 @@ urlpatterns = [
     path('pathology/analyze/', csrf_exempt(pathology_views.pathology_ai_analysis), name='analyze-pathology'),
     path('pathology/health/', pathology_views.pathology_ai_health, name='pathology-health'),
     path('pathology/save-result/', pathology_views.save_pathology_result, name='save-pathology-result'),
+    path('pathology/update-dzi-url/', pathology_views.update_pathology_dzi_url, name='update-pathology-dzi-url'),
     path('pathology/sync-image/', pathology_views.sync_pathology_image_from_worker, name='sync-pathology-image'),
     path('pathology/dzi-proxy/', pathology_views.pathology_dzi_proxy, name='pathology-dzi-proxy'),
     path('pathology/dzi-proxy/<path:encoded_path>', pathology_views.pathology_dzi_proxy, name='pathology-dzi-proxy-path'),

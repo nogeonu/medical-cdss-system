@@ -2,7 +2,7 @@
 OCS Admin
 """
 from django.contrib import admin
-from .models import Order, OrderStatusHistory, DrugInteractionCheck, AllergyCheck
+from .models import Order, OrderStatusHistory, DrugInteractionCheck, AllergyCheck, PathologyAnalysisResult
 
 
 @admin.register(Order)
@@ -55,3 +55,26 @@ class AllergyCheckAdmin(admin.ModelAdmin):
     list_filter = ['has_allergy_risk', 'checked_at']
     search_fields = ['order__id', 'checked_by__username']
     readonly_fields = ['checked_at']
+
+
+@admin.register(PathologyAnalysisResult)
+class PathologyAnalysisResultAdmin(admin.ModelAdmin):
+    list_display = ['id', 'order', 'class_name', 'confidence', 'has_dzi_url', 'created_at']
+    list_filter = ['class_name', 'created_at']
+    search_fields = ['order__id', 'order__patient__name', 'filename']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+    list_editable = []  # list_editable에 넣지 않고 필드만 노출
+
+    def has_dzi_url(self, obj):
+        return bool(obj.dzi_url or obj.viewer_url)
+
+    has_dzi_url.boolean = True
+    has_dzi_url.short_description = 'DZI/뷰어 URL'
+
+    fieldsets = (
+        ('주문', {'fields': ('order',)}),
+        ('분석 결과', {'fields': ('class_id', 'class_name', 'confidence', 'probabilities')}),
+        ('이미지', {'fields': ('filename', 'image_url', 'dzi_url', 'viewer_url')}),
+        ('소견', {'fields': ('findings', 'recommendations')}),
+        ('메타', {'fields': ('id', 'analyzed_by', 'created_at', 'updated_at')}),
+    )

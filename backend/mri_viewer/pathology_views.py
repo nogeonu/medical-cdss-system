@@ -844,6 +844,54 @@ def save_pathology_result(request):
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+@api_view(['POST'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def update_pathology_dzi_url(request):
+    """
+    이미 분석된 주문에 dzi_url(또는 viewer_url)만 추가/수정합니다.
+    워커가 예전에 dzi_url을 안 보냈던 주문(가나다 등) 보정용.
+
+    Request Body: { "order_id": "uuid", "dzi_url": "https://xxx.ngrok-free.app/dzi/...", "viewer_url": "(선택)" }
+    """
+    if not PathologyAnalysisResult or not Order:
+        return Response({'error': 'OCS 모델을 불러올 수 없습니다'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    order_id = request.data.get('order_id')
+    if not order_id:
+        return Response({'error': 'order_id가 필요합니다'}, status=status.HTTP_400_BAD_REQUEST)
+
+    dzi_url = (request.data.get('dzi_url') or '').strip()
+    viewer_url = (request.data.get('viewer_url') or '').strip()
+    if not dzi_url and not viewer_url:
+        return Response({'error': 'dzi_url 또는 viewer_url 중 하나는 필요합니다'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.get(id=order_id)
+    except Order.DoesNotExist:
+        return Response({'error': '주문을 찾을 수 없습니다'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        pathology = order.pathology_analysis
+    except PathologyAnalysisResult.DoesNotExist:
+        return Response({'error': '이 주문에는 병리 분석 결과가 없습니다. 먼저 분석을 완료해 주세요.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if dzi_url:
+        pathology.dzi_url = dzi_url
+    if viewer_url:
+        pathology.viewer_url = viewer_url
+    pathology.save(update_fields=['dzi_url', 'viewer_url', 'updated_at'])
+
+    logger.info(f"✅ 병리 DZI URL 보정: order_id={order_id}, dzi_url={dzi_url[:60]}...")
+    return Response({
+        'success': True,
+        'message': 'dzi_url/viewer_url이 업데이트되었습니다.',
+        'order_id': str(order_id),
+        'dzi_url': pathology.dzi_url or None,
+        'viewer_url': pathology.viewer_url or None,
+    }, status=status.HTTP_200_OK)
+
+
 # 연구실 PC 미디어 베이스 URL (환경변수). 예: http://연구실PC_IP:8000
 PATHOLOGY_WORKER_MEDIA_URL = os.getenv('PATHOLOGY_WORKER_MEDIA_URL', '').rstrip('/')
 
