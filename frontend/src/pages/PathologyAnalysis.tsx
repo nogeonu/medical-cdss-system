@@ -130,7 +130,7 @@ export default function PathologyAnalysis() {
         const orderDetail = await getOrderApi(selectedOrder.id);
         
         if (orderDetail.pathology_analysis) {
-          // 저장된 분석 결과가 있으면 표시
+          // 저장된 분석 결과가 있으면 표시 (dzi_url, viewer_url 포함 → 고해상도 뷰어 버튼 유지)
           const savedResult = orderDetail.pathology_analysis;
           setAnalysisResult({
             class_id: savedResult.class_id,
@@ -138,6 +138,8 @@ export default function PathologyAnalysis() {
             confidence: savedResult.confidence,
             probabilities: savedResult.probabilities,
             image_url: savedResult.image_url,
+            dzi_url: savedResult.dzi_url,
+            viewer_url: savedResult.viewer_url,
             num_patches: 1, // 저장된 결과에는 패치 수 정보가 없을 수 있음
           });
           console.log('✅ 저장된 분석 결과 불러오기 완료:', savedResult);
