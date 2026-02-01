@@ -3,7 +3,9 @@
  * 워커 PC의 타일 서버(DZI) URL → Django 프록시 경유 시 ngrok 헤더 포함
  */
 import { useEffect, useRef, useState, useMemo } from 'react';
-import OpenSeadragon from 'openseadragon';
+import OSD from 'openseadragon';
+// 번들러에 따라 default로 올 수 있음
+const OpenSeadragon = typeof OSD === 'function' ? OSD : ((OSD as { default?: typeof OSD })?.default ?? OSD);
 import {
   Dialog,
   DialogContent,
@@ -76,6 +78,11 @@ export default function PathologyHighResViewer({
     // 다이얼로그 레이아웃 완료 후 뷰어 초기화 (컨테이너 크기 확보)
     const timer = setTimeout(() => {
       if (!containerRef.current) return; // 컨테이너 없으면 뷰어만 스킵, 위 8초 타임아웃으로 안내
+      if (typeof OpenSeadragon !== 'function') {
+        setLoading(false);
+        setLoadError('뷰어를 시작할 수 없습니다. (OpenSeadragon 로드 실패)');
+        return;
+      }
       try {
         const viewer = OpenSeadragon({
           element: containerRef.current,
@@ -108,9 +115,10 @@ export default function PathologyHighResViewer({
         });
       } catch (err) {
         if (loadTimeoutId) clearTimeout(loadTimeoutId);
-        console.error('OpenSeadragon 초기화 실패:', err);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[고해상도 뷰어] OpenSeadragon 초기화 실패:', err);
         setLoading(false);
-        setLoadError('뷰어를 시작할 수 없습니다.');
+        setLoadError(`뷰어를 시작할 수 없습니다. (${msg})`);
       }
     }, 200);
 
