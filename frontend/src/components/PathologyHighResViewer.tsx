@@ -1,8 +1,8 @@
 /**
  * 병리 이미지 고해상도 뷰어 (OpenSeadragon + DZI)
- * 워커 PC의 타일 서버(DZI) URL로 원본 TIF를 실시간 Crop하여 줌인/줌아웃
+ * 워커 PC의 타일 서버(DZI) URL → Django 프록시 경유 시 ngrok 헤더 포함
  */
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import OpenSeadragon from 'openseadragon';
 import {
   Dialog,
@@ -11,6 +11,19 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { AlertCircle, Loader2 } from 'lucide-react';
+
+const DZI_PROXY_PATH = '/api/mri/pathology/dzi-proxy/';
+
+/** 외부 URL(ngrok 등)이면 Django DZI 프록시 URL로 변환 */
+function getEffectiveDziUrl(rawUrl: string): string {
+  const url = (rawUrl || '').trim();
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return `${origin}${DZI_PROXY_PATH}?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
 
 interface PathologyHighResViewerProps {
   open: boolean;
@@ -31,11 +44,26 @@ export default function PathologyHighResViewer({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  /** 외부 URL이면 프록시 경유, 상대 경로면 그대로 사용 */
+  const effectiveDziUrl = useMemo(() => getEffectiveDziUrl(dziUrl), [dziUrl]);
+
   useEffect(() => {
-    if (!open || !containerRef.current || !dziUrl?.trim()) return;
+    if (!open || !containerRef.current || !effectiveDziUrl) return;
 
     setLoadError(null);
     setLoading(true);
+
+    let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+    // 로딩 타임아웃: open/open-failed가 안 오면 15초 후 로딩 해제 + 안내
+    loadTimeoutId = setTimeout(() => {
+      setLoading(false);
+      setLoadError((prev) =>
+        prev
+          ? prev
+          : '로딩 시간이 초과되었습니다. 서버 DZI 프록시와 워커 PC를 확인해 주세요.'
+      );
+    }, 15000);
 
     // 다이얼로그 레이아웃 완료 후 뷰어 초기화 (컨테이너 크기 확보)
     const timer = setTimeout(() => {
@@ -43,7 +71,7 @@ export default function PathologyHighResViewer({
       try {
         const viewer = OpenSeadragon({
           element: containerRef.current,
-          tileSources: dziUrl,
+          tileSources: effectiveDziUrl,
           prefixUrl: 'https://openseadragon.github.io/openseadragon/images/',
           showNavigator: true,
           navigatorPosition: 'BOTTOM_RIGHT',
@@ -57,14 +85,19 @@ export default function PathologyHighResViewer({
 
         const osd = viewer as unknown as { addHandler: (name: string, fn: () => void) => void };
         osd.addHandler('open-failed', () => {
+          if (loadTimeoutId) clearTimeout(loadTimeoutId);
+          loadTimeoutId = null;
           setLoading(false);
           setLoadError('이미지를 불러올 수 없습니다. 워커 PC가 켜져 있는지, DZI 주소가 맞는지 확인해 주세요.');
         });
         osd.addHandler('open', () => {
+          if (loadTimeoutId) clearTimeout(loadTimeoutId);
+          loadTimeoutId = null;
           setLoading(false);
           setLoadError(null);
         });
       } catch (err) {
+        if (loadTimeoutId) clearTimeout(loadTimeoutId);
         console.error('OpenSeadragon 초기화 실패:', err);
         setLoading(false);
         setLoadError('뷰어를 시작할 수 없습니다.');
@@ -73,6 +106,7 @@ export default function PathologyHighResViewer({
 
     return () => {
       clearTimeout(timer);
+      if (loadTimeoutId) clearTimeout(loadTimeoutId);
       if (viewerRef.current) {
         viewerRef.current.destroy();
         viewerRef.current = null;
@@ -80,7 +114,7 @@ export default function PathologyHighResViewer({
       setLoading(true);
       setLoadError(null);
     };
-  }, [open, dziUrl]);
+  }, [open, effectiveDziUrl]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

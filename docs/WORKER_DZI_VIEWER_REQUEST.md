@@ -21,7 +21,7 @@
 ### 2) 외부 접근 가능 URL
 
 - 워커 PC가 **ngrok** 또는 **공인 IP:포트**로 외부에서 접근 가능해야 함
-- 사용자 브라우저가 워커 PC에 직접 타일 요청을 보냄 (우리 서버 경유 없음)
+- **검사실 브라우저는 Django 서버로만 요청**하고, Django가 워커(ngrok)로 프록시할 때 `ngrok-skip-browser-warning` 헤더를 포함함 (DZI 프록시 사용)
 
 ### 3) `complete` API 호출 시 DZI URL 전달
 
@@ -44,9 +44,8 @@ dzi_url: "https://abcd1234.ngrok-free.app/dzi/tumor_076.tif.dzi"
 
 ## 2. CORS 설정
 
-- 워커 타일 서버에서 **CORS 헤더** 허용 필요
-- 우리 프론트엔드 도메인(예: `http://34.42.223.43`, `https://...`)에서 오는 요청 허용
-- 또는 `Access-Control-Allow-Origin: *` (개발 시)
+- DZI 타일은 **Django DZI 프록시**를 통해 요청하므로, 브라우저→워커 직접 요청이 아님
+- 워커는 **Django 서버(백엔드)**에서 오는 요청만 받으면 됨 (서버→서버이므로 CORS 불필요)
 
 ---
 
@@ -54,8 +53,9 @@ dzi_url: "https://abcd1234.ngrok-free.app/dzi/tumor_076.tif.dzi"
 
 - `/pathology-analysis` 페이지에 **"고해상도 뷰어 (원본 TIF 확대)"** 버튼 추가됨
 - `dzi_url` 또는 `viewer_url`이 있으면 버튼 표시
-- 버튼 클릭 시 OpenSeadragon 모달로 DZI 타일 표시
+- 버튼 클릭 시 **Django DZI 프록시** 경유 → OpenSeadragon 모달로 타일 표시 (브라우저는 Django로만 요청, Django가 ngrok에 `ngrok-skip-browser-warning` 포함하여 프록시)
 - 워커 PC가 꺼져 있으면 타일 로드 실패 (연결 불가)
+- 서버팀 상세: `docs/DZI_PROXY_SERVER.md` 참고
 
 ---
 

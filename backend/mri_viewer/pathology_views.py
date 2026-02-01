@@ -924,3 +924,77 @@ def sync_pathology_image_from_worker(request):
     except Exception as e:
         logger.error(f"❌ 병리 이미지 동기화 실패: {str(e)}", exc_info=True)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# DZI 프록시 허용 호스트 (보안: ngrok 등만 허용)
+PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS = os.getenv(
+    'PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS',
+    'ngrok-free.app,ngrok.io,ngrok.app'
+).strip().lower().split(',')
+
+
+@api_view(['GET'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
+def pathology_dzi_proxy(request):
+    """
+    DZI 메타데이터 및 타일 프록시.
+    검사실 브라우저 → Django → 워커(ngrok) 요청 시 ngrok-skip-browser-warning 헤더를 포함합니다.
+
+    GET ?url=<encoded_full_url>
+    예: /api/mri/pathology/dzi-proxy/?url=https%3A%2F%2Fxxx.ngrok-free.app%2Fdzi%2Ftumor.dzi
+    """
+    from django.http import HttpResponse
+    from urllib.parse import urlparse
+
+    url_raw = request.GET.get('url', '').strip()
+    if not url_raw:
+        return Response({'error': 'url 쿼리 파라미터가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        from urllib.parse import unquote
+        target_url = unquote(url_raw)
+    except Exception:
+        target_url = url_raw
+
+    if not target_url.startswith('http://') and not target_url.startswith('https://'):
+        return Response({'error': 'url은 http 또는 https여야 합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        parsed = urlparse(target_url)
+        host = (parsed.hostname or '').lower()
+        allowed = any(
+            host.endswith(a.strip()) or host == a.strip()
+            for a in PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS
+            if a.strip()
+        )
+        if not allowed:
+            logger.warning(f"DZI 프록시 허용되지 않은 호스트: {host}")
+            return Response(
+                {'error': f'허용되지 않은 호스트입니다. PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS를 확인하세요.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+    except Exception as e:
+        logger.warning(f"DZI 프록시 URL 파싱 실패: {e}")
+        return Response({'error': 'url 형식이 올바르지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    headers = {
+        'User-Agent': request.META.get('HTTP_USER_AGENT', 'Django-DZI-Proxy'),
+        'ngrok-skip-browser-warning': 'true',
+    }
+    try:
+        resp = requests.get(target_url, headers=headers, timeout=30)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning(f"DZI 프록시 업스트림 요청 실패: {target_url[:80]} - {e}")
+        return Response(
+            {'error': '워커 DZI 서버에 연결할 수 없습니다. 워커 PC와 ngrok을 확인하세요.'},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+
+    content_type = resp.headers.get('Content-Type', 'application/octet-stream').split(';')[0].strip()
+    response = HttpResponse(resp.content, content_type=content_type)
+    # 캐시 허용 (타일은 변경되지 않음)
+    if 'Cache-Control' not in resp.headers:
+        response['Cache-Control'] = 'public, max-age=3600'
+    return response
