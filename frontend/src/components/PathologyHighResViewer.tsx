@@ -40,6 +40,10 @@ export default function PathologyHighResViewer({
         showNavigator: true,
         navigatorPosition: 'BOTTOM_RIGHT',
         animationTime: 0.3,
+        loadTilesWithAjax: true, // ngrok 헤더 추가를 위해 AJAX로 타일 로드
+        ajaxHeaders: {
+          'ngrok-skip-browser-warning': 'true', // ngrok 경고 페이지 건너뛰기
+        },
       });
     } catch (err) {
       console.error('OpenSeadragon 초기화 실패:', err);
