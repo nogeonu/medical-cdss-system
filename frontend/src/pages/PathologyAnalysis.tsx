@@ -19,7 +19,8 @@ import {
   User,
   Calendar,
   CheckCircle2,
-  ZoomIn
+  ZoomIn,
+  XCircle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOrdersApi, getOrderApi } from '@/lib/api';
@@ -305,6 +306,21 @@ export default function PathologyAnalysis() {
       }
     };
   }, []);
+
+  // 워커 취소/중단 시 사용자가 "대기 취소"할 수 있도록
+  const handleCancelWaiting = () => {
+    if (pollingCleanupRef.current) {
+      pollingCleanupRef.current();
+      pollingCleanupRef.current = null;
+    }
+    sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+    restoredPendingRef.current = false;
+    setPendingRequestId(null);
+    toast({
+      title: "대기 취소",
+      description: "분석 대기를 취소했습니다. 워커가 중단된 경우 다시 분석을 시작해 주세요.",
+    });
+  };
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -703,11 +719,24 @@ export default function PathologyAnalysis() {
               
               {/* 진행 중 표시 */}
               {pendingRequestId && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                    <p className="text-sm text-blue-800">교육원 워커에서 분석 중입니다... (약 50분 소요)</p>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600 flex-shrink-0" />
+                      <p className="text-sm text-blue-800">교육원 워커에서 분석 중입니다... (약 50분 소요)</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelWaiting}
+                      className="flex-shrink-0 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      대기 취소
+                    </Button>
                   </div>
+                  <p className="text-xs text-blue-600">워커가 중단되었다면 &quot;대기 취소&quot; 후 다시 시도해 주세요.</p>
                 </div>
               )}
               
