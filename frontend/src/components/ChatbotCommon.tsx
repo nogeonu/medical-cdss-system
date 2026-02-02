@@ -180,9 +180,7 @@ export function DoctorCard({
         if (!selectedDate || !selectedTime) return;
         const [hour, minute] = selectedTime.split(":");
         const dateLabel = formatKoreanDate(selectedDate);
-        // 의사 코드 포함해서 백엔드가 예약 생성할 수 있도록 함
-        const doctorInfo = doctorCode ? `${doctorName} (${doctorCode})` : doctorName;
-        const message = `${doctorInfo} ${dateLabel} ${Number(hour)}시${Number(minute)}분 예약`;
+        const message = `${doctorName} ${dateLabel} ${Number(hour)}시${Number(minute)}분 예약`;
         onSendMessage(message);
         setExpanded(false);
     };
