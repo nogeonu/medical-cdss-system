@@ -1,11 +1,98 @@
+import re
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
+from django.db import connection
+from rest_framework import serializers as drf_serializers
+
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _try_create_appointment_from_message(message: str, patient_identifier: str, patient_name: str = "") -> tuple[bool, str]:
+    """
+    메시지에서 "OO (D2026004) 2. 5. (목) 13시30분 예약" 형식을 파싱해 예약 생성.
+    반환: (성공 여부, 응답 메시지)
+    """
+    if not patient_identifier:
+        return False, "예약을 하려면 로그인(환자 번호) 후 이용해 주세요."
+
+    # 의사 코드: (D2026004) 또는 (D2026)
+    doctor_code_match = re.search(r'\(D\d+\)', message)
+    if not doctor_code_match:
+        return False, ""
+
+    doctor_code = doctor_code_match.group(0).strip('()')  # D2026004
+
+    # 날짜: "2. 5." 또는 "2. 5. (목)" 또는 "2월 5일"
+    date_match = re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', message) or re.search(r'(\d{1,2})월\s*(\d{1,2})일', message)
+    if not date_match:
+        return False, ""
+
+    month, day = int(date_match.group(1)), int(date_match.group(2))
+    # 시간: 13시30분 또는 13시
+    time_match = re.search(r'(\d{1,2})시\s*(\d{1,2})?분?', message)
+    if not time_match:
+        return False, ""
+
+    hour = int(time_match.group(1))
+    minute = int(time_match.group(2)) if time_match.group(2) else 0
+
+    year = timezone.now().year
+    try:
+        start_time = datetime(year, month, day, hour, minute, 0)  # naive = 한국 시간으로 해석
+    except ValueError:
+        return False, "날짜 또는 시간 형식이 올바르지 않습니다."
+
+    end_time = start_time + timedelta(minutes=30)
+
+    # auth_user에서 doctor_id로 의사 user id 조회
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT id FROM auth_user WHERE doctor_id = %s", [doctor_code])
+            row = cursor.fetchone()
+        if not row:
+            logger.warning(f"챗봇 예약: 의사 코드 없음 doctor_code={doctor_code}")
+            return False, f"의사 코드({doctor_code})를 찾을 수 없습니다."
+        doctor_user_id = row[0]
+    except Exception as e:
+        logger.warning(f"챗봇 예약: 의사 조회 실패 doctor_code={doctor_code}, error={e}")
+        return False, ""
+
+    from patients.models import Appointment
+    from patients.serializers import AppointmentSerializer
+
+    payload = {
+        "title": "챗봇 진료 예약",
+        "type": "예약",
+        "start_time": start_time.isoformat(),
+        "end_time": end_time.isoformat(),
+        "doctor": doctor_user_id,
+        "patient_id": patient_identifier,
+        "patient_name": patient_name or "",
+        "status": "scheduled",
+    }
+
+    serializer = AppointmentSerializer(data=payload, context={"request": None})
+    try:
+        serializer.is_valid(raise_exception=True)
+        apt = serializer.save()
+        date_str = apt.start_time.strftime("%Y년 %m월 %d일 %H:%M")
+        return True, f"예약이 완료되었습니다. ({date_str})"
+    except drf_serializers.ValidationError as e:
+        err = e.detail.get("start_time") or e.detail.get("non_field_errors") or str(e.detail)
+        if isinstance(err, list):
+            err = err[0] if err else str(e.detail)
+        return False, err
+    except Exception as e:
+        logger.warning(f"챗봇 예약 생성 실패: {e}", exc_info=True)
+        return False, "예약 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
 
 
 def _get_appointments_reply(patient_identifier: str) -> str:
@@ -66,6 +153,18 @@ def chat(request):
                 'conversation_id': conversation_id,
                 'success': True,
             }, status=status.HTTP_200_OK)
+
+        # "OO (D2026004) 2. 5. (목) 13시30분 예약" 형식 → 실제 예약 생성 시도
+        if '예약' in message and not any(kw in message for kw in ('내역', '확인', '조회', '목록', '있어', '없어', '알려')):
+            patient_name = (metadata.get('patient_name') or metadata.get('name') or '').strip()
+            ok, response_message = _try_create_appointment_from_message(message, patient_identifier, patient_name)
+            if response_message:
+                return Response({
+                    'reply': response_message,
+                    'message': response_message,
+                    'conversation_id': conversation_id,
+                    'success': ok,
+                }, status=status.HTTP_200_OK)
 
         # 기본 응답 (임시)
         response_message = "안녕하세요! 건양대학교병원 챗봇입니다. 무엇을 도와드릴까요?"

@@ -41,6 +41,7 @@ export default function PatientChatbotWidget() {
             metadata.patient_id = patientUser.patient_id;
             metadata.patient_identifier = patientUser.patient_id;
             metadata.account_id = patientUser.account_id;
+            metadata.patient_name = patientUser.name;
             if (patientUser.patient_pk != null) {
                 metadata.patient_pk = patientUser.patient_pk;
             }
