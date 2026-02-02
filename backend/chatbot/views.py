@@ -32,16 +32,45 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
 
     doctor_code = doctor_code_match.group(0).strip('()')  # D2026004
 
-    # 날짜/시간 파싱 (점 날짜 패턴 포함)
-    from chatbot.services.tooling import _resolve_requested_datetime
-    start_time = _resolve_requested_datetime(message)
-    if not start_time:
-        # 날짜/시간 인식 실패 시: 예: "2.5"만 있고 시간이 없거나, 날짜 형식이 이상할 때
-        return False, "날짜 또는 시간 형식이 올바르지 않습니다."
+    # 날짜/시간 파싱 (점 날짜 패턴 포함 - 인라인 구현)
+    # [FIXED] Force update logic here to ensure deployment picks it up
     
-    logger.info(f"챗봇 예약: 파싱된 시간 start_time={start_time} (naive, 한국 시간 의도)")
+    # 1. 날짜 패턴 정의 (keywords.py 내용 인라인)
+    import re
+    DATE_PATTERNS = [
+        re.compile(r'(\d{1,2})\.\s*(\d{1,2})\.'), # 2. 5.
+        re.compile(r'(\d{1,2})\.(\d{1,2})(?:\s*\([월화수목금토일]\))?'), # 2.5(목) or 2.5
+        re.compile(r'(\d{1,2})월\s*(\d{1,2})일'), # 2월 5일
+    ]
 
-    end_time = start_time + timedelta(minutes=30)
+    month, day = None, None
+    for pattern in DATE_PATTERNS:
+        match = pattern.search(message)
+        if match:
+             month, day = int(match.group(1)), int(match.group(2))
+             break
+    
+    if month is None or day is None:
+        return False, "날짜 형식을 인식할 수 없습니다. (예: 2.5, 2월 5일)"
+
+    # 2. 시간 파싱
+    time_match = re.search(r'(\d{1,2})시\s*(\d{1,2})?분?', message)
+    if not time_match:
+        return False, "시간 형식을 인식할 수 없습니다. (예: 14시 30분)"
+
+    hour = int(time_match.group(1))
+    minute = int(time_match.group(2)) if time_match.group(2) else 0
+
+    # 3. Datetime 생성 (KST 연도 기준)
+    try:
+        from zoneinfo import ZoneInfo
+        now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
+        year = now_korea.year
+        
+        start_time = datetime(year, month, day, hour, minute, 0)
+        logger.info(f"[FIXED_V3] 챗봇 예약: 파싱 성공 start_time={start_time}")
+    except ValueError:
+        return False, "날짜 또는 시간 값이 올바르지 않습니다."
     
     # 현재 한국 시간과 비교 (검증 전 미리보기)
     from zoneinfo import ZoneInfo
@@ -138,9 +167,7 @@ def chat(request):
         # Debugging date parsing logic
         logger.info(f"챗봇 요청 수신: message='{message}'")
         if '예약' in message:
-             from chatbot.services.tooling import _resolve_requested_datetime
-             dt = _resolve_requested_datetime(message)
-             logger.info(f"챗봇 날짜 파싱 테스트: 결과={dt}")
+             logger.info(f"챗봇 예약 로직 진입")
 
         # 예약 내역/확인/조회 요청 → 실제 DB 조회
         if any(kw in message for kw in ('예약 내역', '예약 확인', '예약 조회', '예약 목록', '예약 있어', '예약 없어', '예약 알려')):
