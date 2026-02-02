@@ -36,7 +36,6 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
     # [FIXED] Force update logic here to ensure deployment picks it up
     
     # 1. 날짜 패턴 정의 (keywords.py 내용 인라인)
-    import re
     DATE_PATTERNS = [
         re.compile(r'(\d{1,2})\.\s*(\d{1,2})\.'), # 2. 5.
         re.compile(r'(\d{1,2})\.(\d{1,2})(?:\s*\([월화수목금토일]\))?'), # 2.5(목) or 2.5
