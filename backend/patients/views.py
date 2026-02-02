@@ -222,15 +222,22 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         
         queryset = Appointment.objects.select_related('patient', 'doctor', 'created_by').exclude(status='cancelled')
         
-        # 부서별 필터링: 원무과가 아니면 자신의 부서 예약만
+        # 부서별 필터링: 의료진(Staff)만 적용, 원무과가 아니면 자신의 부서 예약만
+        # 환자 계정(PatientUser)이거나 인증 없으면 부서 필터링 제외
         if self.request.user.is_authenticated:
-            try:
-                user_department = get_department(self.request.user.id)
-                if user_department and user_department != "원무과":
-                    queryset = queryset.filter(doctor_department=user_department)
-            except Exception as e:
-                logger.warning(f"예약 조회 - 부서 정보 가져오기 실패 (user_id: {self.request.user.id}): {e}")
-                # 오류 발생 시 필터링 없이 전체 조회
+            # 환자 계정 확인: User 모델에 is_staff=False이거나 특정 권한이 없으면 환자로 간주
+            # 또는 PatientUser 테이블 확인 (hasattr로 patient_id 존재 여부)
+            is_patient_account = hasattr(self.request.user, 'patient_id') or (not self.request.user.is_staff)
+            
+            if not is_patient_account:
+                # 의료진: 부서별 필터링 적용
+                try:
+                    user_department = get_department(self.request.user.id)
+                    if user_department and user_department != "원무과":
+                        queryset = queryset.filter(doctor_department=user_department)
+                except Exception as e:
+                    logger.warning(f"예약 조회 - 부서 정보 가져오기 실패 (user_id: {self.request.user.id}): {e}")
+                    # 오류 발생 시 필터링 없이 전체 조회
         
         # 추가 필터링
         patient_id = self.request.query_params.get('patient_id')
