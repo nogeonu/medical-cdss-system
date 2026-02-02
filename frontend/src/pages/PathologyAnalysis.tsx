@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -18,10 +18,13 @@ import {
   Search,
   User,
   Calendar,
-  CheckCircle2
+  CheckCircle2,
+  ZoomIn,
+  XCircle
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getOrdersApi, getOrderApi } from '@/lib/api';
+import PathologyHighResViewer from '@/components/PathologyHighResViewer';
 
 interface PathologyAnalysis {
   id: string;
@@ -31,6 +34,8 @@ interface PathologyAnalysis {
   probabilities: Record<string, number>;
   filename: string;
   image_url?: string;
+  dzi_url?: string;  // 고해상도 뷰어용 DZI URL
+  viewer_url?: string;  // 대체 뷰어 URL
   findings?: string;
   recommendations?: string;
   created_at: string;
@@ -51,6 +56,9 @@ interface Order {
   pathology_analysis?: PathologyAnalysis;
 }
 
+// 다른 페이지 갔다 와도 로딩 유지: sessionStorage 키
+const PATHOLOGY_PENDING_KEY = 'pathology_pending_request';
+
 // 교육원 워커 wsi/ 폴더에 있는 사용 가능한 파일 목록
 const AVAILABLE_WSI_FILES = [
   { value: 'tumor_083.tif', label: 'tumor_083.tif (종양)' },
@@ -69,10 +77,45 @@ export default function PathologyAnalysis() {
   const [selectedFilename, setSelectedFilename] = useState<string>('tumor_083.tif'); // 기본값
   const [pendingRequestId, setPendingRequestId] = useState<string | null>(null); // 진행 중인 요청 ID
   const [analysisResult, setAnalysisResult] = useState<any>(null); // 분석 결과
+  const [showHighResViewer, setShowHighResViewer] = useState(false); // 고해상도 뷰어 모달
+  const restoredPendingRef = useRef(false); // 다른 페이지 갔다 와서 복원했는지 (중복 복원 방지)
+  const pollingCleanupRef = useRef<(() => void) | null>(null); // 폴링 취소 함수 (다른 페이지 갈 때 정리)
 
   useEffect(() => {
     loadOrders();
   }, []);
+
+  // 다른 페이지 갔다 와도 로딩 유지: sessionStorage에 저장된 진행 중 요청 복원 후 폴링 재개
+  useEffect(() => {
+    if (orders.length === 0 || restoredPendingRef.current) return;
+    const raw = sessionStorage.getItem(PATHOLOGY_PENDING_KEY);
+    if (!raw) return;
+    try {
+      const { requestId, orderId, filename } = JSON.parse(raw) as { requestId: string; orderId: string; filename: string };
+      let order = orders.find((o) => o.id === orderId);
+      if (!order) {
+        getOrderApi(orderId)
+          .then((ord) => {
+            restoredPendingRef.current = true;
+            setSelectedOrder(ord);
+            setSelectedFilename(filename || 'tumor_083.tif');
+            setPendingRequestId(requestId);
+            setAnalysisResult(null);
+            pollingCleanupRef.current = startPollingResult(requestId, ord, filename || 'tumor_083.tif');
+          })
+          .catch(() => sessionStorage.removeItem(PATHOLOGY_PENDING_KEY));
+        return;
+      }
+      restoredPendingRef.current = true;
+      setSelectedOrder(order);
+      setSelectedFilename(filename || 'tumor_083.tif');
+      setPendingRequestId(requestId);
+      setAnalysisResult(null);
+      pollingCleanupRef.current = startPollingResult(requestId, order, filename || 'tumor_083.tif');
+    } catch {
+      sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+    }
+  }, [orders]);
 
   // 주문 선택 시 저장된 분석 결과 불러오기
   useEffect(() => {
@@ -87,7 +130,7 @@ export default function PathologyAnalysis() {
         const orderDetail = await getOrderApi(selectedOrder.id);
         
         if (orderDetail.pathology_analysis) {
-          // 저장된 분석 결과가 있으면 표시
+          // 저장된 분석 결과가 있으면 표시 (dzi_url, viewer_url 포함 → 고해상도 뷰어 버튼 유지)
           const savedResult = orderDetail.pathology_analysis;
           setAnalysisResult({
             class_id: savedResult.class_id,
@@ -95,6 +138,8 @@ export default function PathologyAnalysis() {
             confidence: savedResult.confidence,
             probabilities: savedResult.probabilities,
             image_url: savedResult.image_url,
+            dzi_url: savedResult.dzi_url,
+            viewer_url: savedResult.viewer_url,
             num_patches: 1, // 저장된 결과에는 패치 수 정보가 없을 수 있음
           });
           console.log('✅ 저장된 분석 결과 불러오기 완료:', savedResult);
@@ -121,6 +166,8 @@ export default function PathologyAnalysis() {
     const poll = async () => {
       if (isCancelled || attempts >= maxAttempts) {
         if (attempts >= maxAttempts && !isCancelled) {
+          sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+          pollingCleanupRef.current = null;
           toast({
             title: "분석 시간 초과",
             description: "분석이 50분을 초과했습니다. 나중에 다시 확인해주세요.",
@@ -148,11 +195,15 @@ export default function PathologyAnalysis() {
             confidence: number;
             probabilities: Record<string, number>;
             image_url?: string;
+            dzi_url?: string;
+            viewer_url?: string;
           };
           error?: string;
         };
         
         if (data.status === 'completed' && data.result) {
+          sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+          pollingCleanupRef.current = null;
           setAnalysisResult(data.result);
           setPendingRequestId(null);
           
@@ -179,6 +230,8 @@ export default function PathologyAnalysis() {
                   probabilities: data.result.probabilities,
                   filename: filename,
                   image_url: data.result.image_url || '',
+                  dzi_url: data.result.dzi_url || '',  // 고해상도 뷰어용 DZI URL 저장
+                  viewer_url: data.result.viewer_url || '',  // 대체 뷰어 URL 저장
                   findings: data.result.class_name === 'Tumor' ? '종양 조직이 관찰되었습니다.' : '정상 조직입니다.',
                   recommendations: data.result.class_name === 'Tumor' ? '추가 검사 및 치료 계획 수립이 필요합니다.' : '정기 검진을 권장합니다.',
                 }),
@@ -216,6 +269,8 @@ export default function PathologyAnalysis() {
           // 주문 목록 새로고침
           loadOrders();
         } else if (data.status === 'failed') {
+          sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+          pollingCleanupRef.current = null;
           setPendingRequestId(null);
           toast({
             title: "분석 실패",
@@ -250,13 +305,30 @@ export default function PathologyAnalysis() {
     };
   };
   
-  // 컴포넌트 언마운트 시 폴링 정리
+  // 다른 페이지로 나갈 때 폴링만 중지 (sessionStorage는 유지 → 돌아오면 복원)
   useEffect(() => {
     return () => {
-      // 컴포넌트 언마운트 시 폴링 중지
-      setPendingRequestId(null);
+      if (pollingCleanupRef.current) {
+        pollingCleanupRef.current();
+        pollingCleanupRef.current = null;
+      }
     };
   }, []);
+
+  // 워커 취소/중단 시 사용자가 "대기 취소"할 수 있도록
+  const handleCancelWaiting = () => {
+    if (pollingCleanupRef.current) {
+      pollingCleanupRef.current();
+      pollingCleanupRef.current = null;
+    }
+    sessionStorage.removeItem(PATHOLOGY_PENDING_KEY);
+    restoredPendingRef.current = false;
+    setPendingRequestId(null);
+    toast({
+      title: "대기 취소",
+      description: "분석 대기를 취소했습니다. 워커가 중단된 경우 다시 분석을 시작해 주세요.",
+    });
+  };
 
   useEffect(() => {
     if (searchTerm.trim()) {
@@ -353,8 +425,16 @@ export default function PathologyAnalysis() {
         throw new Error(data.error || `서버 오류 (${response.status})`);
       }
 
-      // request_id 저장하고 폴링 시작
+      // request_id 저장하고 폴링 시작 (다른 페이지 갔다 와도 로딩 유지용 sessionStorage 저장)
       if (data.request_id) {
+        sessionStorage.setItem(
+          PATHOLOGY_PENDING_KEY,
+          JSON.stringify({
+            requestId: data.request_id,
+            orderId: selectedOrder.id,
+            filename: selectedFilename,
+          })
+        );
         setPendingRequestId(data.request_id);
         setAnalysisResult(null);
         
@@ -372,7 +452,7 @@ export default function PathologyAnalysis() {
           });
           return;
         }
-        startPollingResult(data.request_id, selectedOrder, selectedFilename);
+        pollingCleanupRef.current = startPollingResult(data.request_id, selectedOrder, selectedFilename);
       } else {
         toast({
           title: "분석 요청 완료",
@@ -603,27 +683,39 @@ export default function PathologyAnalysis() {
                         </span>
                       </div>
                     )}
-                    {analysisResult.image_url && (
+                    {(analysisResult.image_url || analysisResult.viewer_url || analysisResult.dzi_url) && (
                       <div className="mt-3 pt-3 border-t border-green-200">
                         <p className="font-semibold text-gray-700 mb-2">결과 이미지:</p>
-                        <div className="flex gap-2">
-                          <a 
-                            href={analysisResult.image_url} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
-                          >
-                            <Scan className="h-4 w-4" />
-                            결과 이미지 보기
-                          </a>
-                          {analysisResult.viewer_url && (
+                        <div className="flex flex-wrap gap-2">
+                          {analysisResult.image_url && (
+                            <a 
+                              href={analysisResult.image_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer" 
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                            >
+                              <Scan className="h-4 w-4" />
+                              결과 이미지 보기
+                            </a>
+                          )}
+                          {analysisResult.dzi_url && (
+                            <button
+                              type="button"
+                              onClick={() => setShowHighResViewer(true)}
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                            >
+                              <ZoomIn className="h-4 w-4" />
+                              고해상도 뷰어 (원본 TIF 확대)
+                            </button>
+                          )}
+                          {analysisResult.viewer_url && !analysisResult.dzi_url && (
                             <a 
                               href={analysisResult.viewer_url} 
                               target="_blank" 
                               rel="noopener noreferrer" 
-                              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                              className="inline-flex items-center gap-2 px-4 py-2 bg-slate-600 text-white rounded-md hover:bg-slate-700 transition-colors"
                             >
-                              뷰어에서 보기
+                              새 탭에서 뷰어 열기
                             </a>
                           )}
                         </div>
@@ -635,11 +727,24 @@ export default function PathologyAnalysis() {
               
               {/* 진행 중 표시 */}
               {pendingRequestId && (
-                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                    <p className="text-sm text-blue-800">교육원 워커에서 분석 중입니다... (약 50분 소요)</p>
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-blue-600 flex-shrink-0" />
+                      <p className="text-sm text-blue-800">교육원 워커에서 분석 중입니다... (약 50분 소요)</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={handleCancelWaiting}
+                      className="flex-shrink-0 border-red-300 text-red-700 hover:bg-red-50 hover:text-red-800"
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      대기 취소
+                    </Button>
                   </div>
+                  <p className="text-xs text-blue-600">워커가 중단되었다면 &quot;대기 취소&quot; 후 다시 시도해 주세요.</p>
                 </div>
               )}
               
@@ -664,6 +769,14 @@ export default function PathologyAnalysis() {
           </CardContent>
         </Card>
       )}
+
+      {/* 고해상도 뷰어 모달 (OpenSeadragon + DZI) */}
+      <PathologyHighResViewer
+        open={showHighResViewer}
+        onOpenChange={setShowHighResViewer}
+        dziUrl={analysisResult?.dzi_url ?? ''}
+        title={`고해상도 뷰어 - ${selectedOrder?.patient_name || ''}`}
+      />
     </div>
   );
 }

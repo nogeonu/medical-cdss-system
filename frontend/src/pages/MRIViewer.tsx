@@ -374,12 +374,8 @@ export default function MRIViewer() {
       console.error('[fetchOrthancImages] Orthanc 이미지 로드 실패:', error);
       setAllOrthancImages([]);
       setOrthancImages([]);
-      setShowOrthancImages(true); // 에러 발생 시에도 뷰어 표시
-      toast({
-        title: "오류",
-        description: error instanceof Error ? error.message : "Orthanc 이미지를 불러오는데 실패했습니다.",
-        variant: "destructive",
-      });
+      setShowOrthancImages(true); // 에러 발생 시에도 뷰어에 "이미지 없음"만 표시
+      // 이미지 없음(Patient not found 등) 시 빨간 오류 토스트 생략 — 뷰어 안내만 표시
     } finally {
       setImageLoading(false);
     }
