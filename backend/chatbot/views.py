@@ -133,8 +133,13 @@ def chat(request):
         conversation_id = request.data.get('conversation_id', '')
         metadata = request.data.get('metadata') or {}
         patient_identifier = (metadata.get('patient_identifier') or metadata.get('patient_id') or '').strip()
-
-        logger.info(f"챗봇 요청: message={message[:50]}, conversation_id={conversation_id}, patient_identifier={patient_identifier or '(없음)'}")
+        
+        # Debugging date parsing logic
+        logger.info(f"챗봇 요청 수신: message='{message}'")
+        if '예약' in message:
+             from chatbot.services.tooling import _resolve_requested_datetime
+             dt = _resolve_requested_datetime(message)
+             logger.info(f"챗봇 날짜 파싱 테스트: 결과={dt}")
 
         # 예약 내역/확인/조회 요청 → 실제 DB 조회
         if any(kw in message for kw in ('예약 내역', '예약 확인', '예약 조회', '예약 목록', '예약 있어', '예약 없어', '예약 알려')):
