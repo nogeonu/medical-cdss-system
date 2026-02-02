@@ -172,6 +172,7 @@ class VoiceOfCustomer(models.Model):
         verbose_name = '고객의 소리'
         verbose_name_plural = '고객의 소리(VOC) 목록'
         ordering = ['-created_at']
+        db_table = 'voice_of_customer'
         
     def __str__(self):
         return f"[{self.get_type_display()}] {self.title} - {self.name}"
