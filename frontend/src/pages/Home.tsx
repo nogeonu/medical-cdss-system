@@ -2,10 +2,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  ArrowRight, 
-  Activity, 
-  Brain, 
-  ShieldCheck, 
+  ArrowRight,
+  Activity,
+  Brain,
+  ShieldCheck,
   Stethoscope,
   CalendarCheck,
   Search,
@@ -37,22 +37,41 @@ export default function Home() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-const navItems = [
-    { name: "병원소개", path: "#about" },
+  const navItems = [
+    { name: "병원소개", path: "/#about" },
     { name: "진료안내", path: "/patient/doctors" },
     { name: "의료진소개", path: "/patient/doctors" },
     { name: "건강정보", path: "/health-info" },
-    { name: "고객센터", path: "#contact" },
-];
+    { name: "고객센터", path: "/customer-support" },
+  ];
+
+  const handleAnchorClick = (path: string) => {
+    // If path starts with /, remove it effectively
+    const hash = path.includes("#") ? path.split("#")[1] : "";
+    if (hash) {
+      if (window.location.pathname !== "/") {
+        navigate("/");
+        setTimeout(() => {
+          const target = document.getElementById(hash);
+          if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 100);
+      } else {
+        const target = document.getElementById(hash);
+        if (target) {
+          target.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-background font-sans">
       {/* Header */}
-      <header 
+      <header
         className={cn(
           "fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b",
-          isScrolled 
-            ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-gray-200 dark:border-gray-800 py-3" 
+          isScrolled
+            ? "bg-white/90 dark:bg-gray-900/90 backdrop-blur-md shadow-sm border-gray-200 dark:border-gray-800 py-3"
             : "bg-transparent border-transparent py-5"
         )}
       >
@@ -73,15 +92,26 @@ const navItems = [
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center gap-8">
             <nav className="flex gap-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className="px-4 py-2 text-base font-medium bg-transparent hover:bg-primary/5 hover:text-primary rounded-md transition-colors cursor-pointer"
-                >
-                  {item.name}
-                </Link>
-              ))}
+              {navItems.map((item) =>
+                item.path.startsWith("#") ? (
+                  <button
+                    key={item.path}
+                    type="button"
+                    className="px-4 py-2 text-base font-medium bg-transparent hover:bg-primary/5 hover:text-primary rounded-md transition-colors cursor-pointer"
+                    onClick={() => handleAnchorClick(item.path)}
+                  >
+                    {item.name}
+                  </button>
+                ) : (
+                  <Link
+                    key={item.path}
+                    to={item.path}
+                    className="px-4 py-2 text-base font-medium bg-transparent hover:bg-primary/5 hover:text-primary rounded-md transition-colors cursor-pointer"
+                  >
+                    {item.name}
+                  </Link>
+                )
+              )}
             </nav>
           </div>
 
@@ -101,8 +131,8 @@ const navItems = [
                     <span>진료예약</span>
                   </Button>
                 </Link>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="gap-2 border-red-200 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all"
                   onClick={() => {
                     setPatientUser(null);
@@ -132,7 +162,7 @@ const navItems = [
           </div>
 
           {/* Mobile Menu Toggle */}
-          <button 
+          <button
             className="md:hidden p-2 text-foreground"
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           >
@@ -145,16 +175,30 @@ const navItems = [
       {isMobileMenuOpen && (
         <div className="fixed inset-0 z-40 bg-background md:hidden pt-24 px-6 animate-in slide-in-from-top-10 duration-200">
           <nav className="flex flex-col gap-6 text-lg font-medium">
-            {navItems.map((item) => (
-              <Link key={item.path} to={item.path}>
-                <span 
-                  className="py-3 border-b border-border flex justify-between items-center cursor-pointer"
-                  onClick={() => setIsMobileMenuOpen(false)}
+            {navItems.map((item) =>
+              item.path.startsWith("#") ? (
+                <button
+                  key={item.path}
+                  type="button"
+                  className="py-3 border-b border-border flex justify-between items-center cursor-pointer text-left"
+                  onClick={() => {
+                    handleAnchorClick(item.path);
+                    setIsMobileMenuOpen(false);
+                  }}
                 >
                   {item.name}
-                </span>
-              </Link>
-            ))}
+                </button>
+              ) : (
+                <Link key={item.path} to={item.path}>
+                  <span
+                    className="py-3 border-b border-border flex justify-between items-center cursor-pointer"
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    {item.name}
+                  </span>
+                </Link>
+              )
+            )}
             <div className="flex flex-col gap-3 mt-4">
               {patientUser ? (
                 <>
@@ -170,8 +214,8 @@ const navItems = [
                       진료예약
                     </Button>
                   </Link>
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     className="w-full justify-center gap-2 border-red-200 hover:bg-red-50 hover:text-red-600 hover:border-red-300"
                     onClick={() => {
                       setPatientUser(null);
@@ -210,9 +254,9 @@ const navItems = [
         <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-slate-50 dark:bg-slate-950">
           {/* Background Image with Overlay */}
           <div className="absolute inset-0 z-0">
-            <img 
-              src="/images/hero-bg.jpg" 
-              alt="Futuristic Hospital Lobby" 
+            <img
+              src="/images/hero-bg.jpg"
+              alt="Futuristic Hospital Lobby"
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-white/70 to-transparent dark:from-black/90 dark:via-black/70 dark:to-transparent"></div>
@@ -225,11 +269,11 @@ const navItems = [
                 Next Generation Medical AI
               </Badge>
               <h1 className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 dark:text-white mb-6 leading-[1.1]">
-                미래 의료의 기준,<br/>
+                미래 의료의 기준,<br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">CDSS 메디컬 센터</span>
               </h1>
               <p className="text-xl text-slate-600 dark:text-slate-300 mb-10 leading-relaxed max-w-lg">
-                최첨단 AI 진단 시스템과 전문 의료진의 협진으로<br/>
+                최첨단 AI 진단 시스템과 전문 의료진의 협진으로<br />
                 당신의 건강한 삶을 위한 가장 정확한 답을 제시합니다.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
@@ -256,9 +300,9 @@ const navItems = [
           <div className="container">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               {[
-                { icon: CalendarCheck, title: "간편 예약", desc: "모바일로 쉽고 빠르게", link: patientUser ? "/patient/doctors" : "/patient/login" },
+                { icon: CalendarCheck, title: "간편 예약", desc: "모바일로 쉽고 빠르게", link: "/patient/doctors" },
                 { icon: Search, title: "진료과 찾기", desc: "증상별 맞춤 진료과", link: "/patient/doctors" },
-                { icon: FileText, title: "제증명 발급", desc: "온라인 즉시 발급", link: patientUser ? "/patient/records" : "/patient/login" },
+                { icon: FileText, title: "제증명 발급", desc: "온라인 즉시 발급", link: "/patient/records" },
                 { icon: Stethoscope, title: "건강검진", desc: "여성 건강 통계·검진 정보", link: "/breast-cancer-stats" }
               ].map((item, idx) => (
                 <Link key={idx} to={item.link}>
@@ -279,14 +323,14 @@ const navItems = [
         </section>
 
         {/* AI Diagnosis Section */}
-        <section className="py-24 bg-slate-50 dark:bg-slate-900 overflow-hidden">
+        <section id="about" className="py-24 bg-slate-50 dark:bg-slate-900 overflow-hidden scroll-mt-24">
           <div className="container">
             <div className="flex flex-col lg:flex-row items-center gap-16">
               <div className="lg:w-1/2 relative">
                 <div className="relative rounded-3xl overflow-hidden shadow-2xl border-8 border-white dark:border-slate-800">
-                  <img 
-                    src="/images/ai-diagnosis.jpg" 
-                    alt="AI Diagnosis System" 
+                  <img
+                    src="/images/ai-diagnosis.jpg"
+                    alt="AI Diagnosis System"
                     className="w-full h-auto hover:scale-105 transition-transform duration-700"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-8">
@@ -297,26 +341,26 @@ const navItems = [
                       </div>
                       <p className="font-medium">환자 데이터 실시간 동기화 및 분석</p>
                     </div>
-            </div>
-          </div>
+                  </div>
+                </div>
                 {/* Decorative Elements */}
                 <div className="absolute -top-10 -left-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
                 <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-accent/10 rounded-full blur-3xl"></div>
               </div>
-              
+
               <div className="lg:w-1/2">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-bold mb-6">
                   <Brain className="w-4 h-4" />
                   <span>Intelligent Healthcare</span>
-            </div>
+                </div>
                 <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight text-foreground">
-                  AI가 더하는<br/>
+                  AI가 더하는<br />
                   <span className="text-primary">정확함의 깊이</span>
                 </h2>
                 <p className="text-lg text-muted-foreground mb-8 leading-relaxed">
                   CDSS(Clinical Decision Support System)는 수만 건의 임상 데이터를 학습한 AI가 의료진의 진단을 보조하여, 오진율을 획기적으로 낮추고 최적의 치료 계획을 수립하도록 돕습니다.
                 </p>
-                
+
                 <div className="space-y-6">
                   {[
                     { title: "실시간 데이터 분석", desc: "환자의 생체 신호를 실시간으로 모니터링하고 이상 징후를 즉시 감지합니다." },
@@ -343,18 +387,18 @@ const navItems = [
         {/* CDSS Platform Access Banner */}
         <section className="py-20 relative overflow-hidden">
           <div className="absolute inset-0">
-            <img 
-              src="/images/medical-tech.jpg" 
-              alt="Medical Tech Background" 
+            <img
+              src="/images/medical-tech.jpg"
+              alt="Medical Tech Background"
               className="w-full h-full object-cover"
             />
             <div className="absolute inset-0 bg-primary/90 mix-blend-multiply"></div>
           </div>
-          
+
           <div className="container relative z-10 text-center text-white">
             <h2 className="text-4xl md:text-5xl font-bold mb-6">의료진 전용 플랫폼</h2>
             <p className="text-xl text-white/80 mb-10 max-w-2xl mx-auto">
-              CDSS(Clinical Decision Support System)는 의료진을 위한 통합 진료 지원 시스템입니다.<br/>
+              CDSS(Clinical Decision Support System)는 의료진을 위한 통합 진료 지원 시스템입니다.<br />
               권한이 있는 의료진만 접속 가능합니다.
             </p>
             <div className="flex flex-col sm:flex-row justify-center gap-4">
@@ -366,7 +410,7 @@ const navItems = [
               <Link to="/app-download">
                 <Button size="lg" className="bg-white text-primary hover:bg-white/90 h-14 px-8 text-lg rounded-full font-bold">
                   사용자 앱 다운로드
-      </Button>
+                </Button>
               </Link>
             </div>
           </div>
@@ -374,7 +418,7 @@ const navItems = [
       </main>
 
       {/* Footer */}
-      <footer className="bg-slate-50 dark:bg-slate-900 border-t border-border pt-16 pb-8">
+      <footer id="contact" className="bg-slate-50 dark:bg-slate-900 border-t border-border pt-16 pb-8 scroll-mt-24">
         <div className="container">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
             <div className="col-span-1 md:col-span-1">
@@ -385,8 +429,8 @@ const navItems = [
                 <span className="text-lg font-bold">CDSS Medical</span>
               </div>
               <p className="text-muted-foreground text-sm leading-relaxed mb-6">
-                차세대 지능형 의료지원 시스템으로<br/>
-                더 정확하고 안전한 의료 서비스를 제공합니다.<br/>
+                차세대 지능형 의료지원 시스템으로<br />
+                더 정확하고 안전한 의료 서비스를 제공합니다.<br />
                 환자 중심의 미래형 병원, CDSS입니다.
               </p>
               <div className="flex gap-4">
@@ -396,49 +440,51 @@ const navItems = [
                 <button className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-muted-foreground hover:bg-primary hover:text-white transition-colors cursor-pointer text-xs font-bold">I</button>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-bold mb-6 text-foreground">진료 안내</h4>
               <ul className="space-y-3 text-sm text-muted-foreground">
                 <li><Link to="/patient/doctors"><span className="hover:text-primary transition-colors cursor-pointer">진료과 안내</span></Link></li>
                 <li><Link to="/patient/doctors"><span className="hover:text-primary transition-colors cursor-pointer">의료진 찾기</span></Link></li>
-                <li><Link to="/patient/login"><span className="hover:text-primary transition-colors cursor-pointer">진료 예약</span></Link></li>
-                <li><Link to="/patient/login"><span className="hover:text-primary transition-colors cursor-pointer">건강검진 예약</span></Link></li>
+                <li><Link to="/patient/doctors"><span className="hover:text-primary transition-colors cursor-pointer">진료 예약</span></Link></li>
+                <li><Link to="/patient/doctors"><span className="hover:text-primary transition-colors cursor-pointer">건강검진 예약</span></Link></li>
               </ul>
             </div>
-            
+
             <div>
               <h4 className="font-bold mb-6 text-foreground">병원 이용</h4>
               <ul className="space-y-3 text-sm text-muted-foreground">
-                <li><Link to={patientUser ? "/patient/records" : "/patient/login"}><span className="hover:text-primary transition-colors cursor-pointer">진료 내역 조회</span></Link></li>
+                <li><Link to="/patient/records"><span className="hover:text-primary transition-colors cursor-pointer">진료 내역 조회</span></Link></li>
                 <li><Link to={patientUser ? "/patient/mypage" : "/patient/login"}><span className="hover:text-primary transition-colors cursor-pointer">마이페이지</span></Link></li>
                 <li><Link to="/app-download"><span className="hover:text-primary transition-colors cursor-pointer">앱 다운로드</span></Link></li>
-                <li><Link to="/patient/login"><span className="hover:text-primary transition-colors cursor-pointer">증명서 발급</span></Link></li>
+                <li><Link to="/patient/records"><span className="hover:text-primary transition-colors cursor-pointer">증명서 발급</span></Link></li>
               </ul>
             </div>
-            
-          <div>
+
+            <div>
               <h4 className="font-bold mb-6 text-foreground">고객 센터</h4>
               <div className="flex items-center gap-3 mb-4">
                 <Phone className="w-5 h-5 text-primary" />
                 <span className="text-xl font-bold">1577-0000</span>
               </div>
               <p className="text-sm text-muted-foreground mb-2">
-                평일: 09:00 - 18:00<br/>
-                토요일: 09:00 - 13:00<br/>
+                평일: 09:00 - 18:00<br />
+                토요일: 09:00 - 13:00<br />
                 일요일/공휴일 휴무
               </p>
-              <Button variant="outline" size="sm" className="mt-4 w-full">
-                1:1 문의하기
+              <Button asChild variant="outline" size="sm" className="mt-4 w-full">
+                <Link to="/customer-support">1:1 문의하기</Link>
               </Button>
             </div>
           </div>
-          
+
           <div className="border-t border-slate-200 dark:border-slate-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4 text-xs text-muted-foreground">
             <div className="flex gap-6">
               <a href="#" className="hover:text-foreground">이용약관</a>
               <a href="#" className="font-bold hover:text-foreground">개인정보처리방침</a>
               <a href="#" className="hover:text-foreground">환자의 권리와 의무</a>
+              <Link to="/customer-support" className="hover:text-foreground">고객센터</Link>
+              <Link to="/customer-support" className="hover:text-foreground">1:1 문의하기</Link>
             </div>
             <p>© 2025 CDSS Medical Center. All rights reserved.</p>
           </div>

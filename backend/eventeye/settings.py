@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'ocs',
     'chatbot',
     'lis',
+    'hospital',
     'channels',
     'chat',
 ]

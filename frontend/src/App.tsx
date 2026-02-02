@@ -44,13 +44,14 @@ import LaboratoryAIAnalysis from "@/pages/LaboratoryAIAnalysis";
 import PathologyAnalysis from "@/pages/PathologyAnalysis";
 import HealthInfo from "@/pages/HealthInfo";
 import BreastCancerStats from "@/pages/BreastCancerStats";
+import CustomerSupport from "@/pages/CustomerSupport";
 
 const queryClient = new QueryClient();
 
 function AppContentInner() {
   const location = useLocation();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   const isPublicPage = [
     "/",
     "/login",
@@ -63,6 +64,7 @@ function AppContentInner() {
     "/app-download",
     "/health-info",
     "/breast-cancer-stats",
+    "/customer-support",
   ].includes(location.pathname);
 
   // MRIImageDetail 페이지는 사이드바 숨김 (전체 화면)
@@ -257,12 +259,13 @@ function AppContentInner() {
             <Route path="/app-download" element={<AppDownload />} />
             <Route path="/health-info" element={<HealthInfo />} />
             <Route path="/breast-cancer-stats" element={<BreastCancerStats />} />
+            <Route path="/customer-support" element={<CustomerSupport />} />
             <Route
               path="/mri-viewer/:patientId"
               element={
-              <ProtectedRoute allowedRoles={["medical_staff", "superuser"]}>
+                <ProtectedRoute allowedRoles={["medical_staff", "superuser"]}>
                   <MRIImageDetail />
-              </ProtectedRoute>
+                </ProtectedRoute>
               }
             />
             <Route path="*" element={<NotFound />} />

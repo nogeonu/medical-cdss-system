@@ -142,3 +142,36 @@ class AIAnalysisResult(models.Model):
     
     def __str__(self):
         return f"{self.image.patient.name} - {self.analysis_type} 분석"
+
+class VoiceOfCustomer(models.Model):
+    """고객의 소리(VOC) 모델"""
+    RELATION_CHOICES = [
+        ('self', '본인'),
+        ('family', '가족'),
+        ('other', '기타'),
+    ]
+    
+    TYPE_CHOICES = [
+        ('compliment', '칭찬'),
+        ('complaint', '불만'),
+        ('suggestion', '제안 및 건의'),
+    ]
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=100, verbose_name='이름')
+    phone = models.CharField(max_length=50, verbose_name='연락처')
+    email = models.EmailField(verbose_name='이메일')
+    relation = models.CharField(max_length=20, choices=RELATION_CHOICES, verbose_name='환자와의 관계')
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, verbose_name='상담 유형')
+    title = models.CharField(max_length=200, verbose_name='제목')
+    content = models.TextField(verbose_name='내용')
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name='접수일')
+    is_resolved = models.BooleanField(default=False, verbose_name='처리 완료 여부')
+    
+    class Meta:
+        verbose_name = '고객의 소리'
+        verbose_name_plural = '고객의 소리(VOC) 목록'
+        ordering = ['-created_at']
+        
+    def __str__(self):
+        return f"[{self.get_type_display()}] {self.title} - {self.name}"

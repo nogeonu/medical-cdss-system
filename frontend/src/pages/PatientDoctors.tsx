@@ -110,7 +110,8 @@ export default function PatientDoctors() {
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  
+  const [thankYouDoctors, setThankYouDoctors] = useState<Set<number>>(new Set());
+
   // 예약 다이얼로그 상태
   const [appointmentDialogOpen, setAppointmentDialogOpen] = useState(false);
   const [selectedDoctor, setSelectedDoctor] = useState<Doctor | null>(null);
@@ -174,9 +175,29 @@ export default function PatientDoctors() {
     setAppointmentDialogOpen(true);
   };
 
+  const handleThankYouClick = (doctor: Doctor) => {
+    const nextIsThanked = !thankYouDoctors.has(doctor.id);
+    setThankYouDoctors((prev) => {
+      const next = new Set(prev);
+      if (nextIsThanked) {
+        next.add(doctor.id);
+      } else {
+        next.delete(doctor.id);
+      }
+      return next;
+    });
+
+    toast({
+      title: nextIsThanked ? "감사가 전달되었습니다." : "감사 표시가 취소되었습니다.",
+      description: nextIsThanked
+        ? `${getDisplayName(doctor)} 선생님께 감사 인사가 전달되었습니다.`
+        : undefined,
+    });
+  };
+
   const handleAppointmentSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    
+
     if (!selectedDoctor || !appointmentDate || !appointmentTime) {
       toast({
         title: "입력 값을 확인해주세요",
@@ -201,11 +222,11 @@ export default function PatientDoctors() {
       const [hours, minutes] = appointmentTime.split(":").map(Number);
       const startDate = new Date(appointmentDate);
       startDate.setHours(hours, minutes, 0, 0);
-      
+
       // 30분 후 종료 시간 계산
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + 30);
-      
+
       // 서버(Asia/Seoul, USE_TZ=False)에 맞게 로컬 시간 문자열로 전송 (toISOString 사용 시 UTC로 바뀌어 9시간 어긋남)
       const toLocalISO = (d: Date) => {
         const y = d.getFullYear();
@@ -232,10 +253,10 @@ export default function PatientDoctors() {
 
       console.log("예약 데이터:", appointmentData);
       await createAppointmentApi(appointmentData);
-      
+
       // 예약 생성 후 예약 정보 페이지에 알림 (자동 새로고침)
       window.dispatchEvent(new CustomEvent('appointment-created'));
-      
+
       toast({
         title: "예약이 완료되었습니다",
         description: `${format(appointmentDate, "yyyy년 MM월 dd일", { locale: ko })} ${appointmentTime}에 예약되었습니다.`,
@@ -250,9 +271,9 @@ export default function PatientDoctors() {
     } catch (error: any) {
       console.error("예약 생성 실패:", error);
       console.error("에러 응답:", error?.response?.data);
-      
+
       let errorMessage = "예약 생성에 실패했습니다. 잠시 후 다시 시도해주세요.";
-      
+
       if (error?.response?.data) {
         const data = error.response.data;
         if (typeof data === "string") {
@@ -262,8 +283,8 @@ export default function PatientDoctors() {
         } else if (data.error) {
           errorMessage = data.error;
         } else if (data.non_field_errors) {
-          errorMessage = Array.isArray(data.non_field_errors) 
-            ? data.non_field_errors.join(", ") 
+          errorMessage = Array.isArray(data.non_field_errors)
+            ? data.non_field_errors.join(", ")
             : String(data.non_field_errors);
         } else {
           // 필드별 오류 메시지 수집
@@ -278,7 +299,7 @@ export default function PatientDoctors() {
           }
         }
       }
-      
+
       toast({
         title: "예약 실패",
         description: errorMessage,
@@ -413,6 +434,7 @@ export default function PatientDoctors() {
                 const name = getDisplayName(doctor);
                 const departmentLabel =
                   DEPARTMENT_LABELS[doctor.department] ?? doctor.department;
+                const isThanked = thankYouDoctors.has(doctor.id);
                 return (
                   <Card
                     key={doctor.id}
@@ -446,9 +468,6 @@ export default function PatientDoctors() {
                         <span>이메일: {doctor.email || "-"}</span>
                       </div>
                       <div className="flex flex-wrap items-center gap-3 pt-2">
-                        <Button variant="outline" size="sm" className="gap-2">
-                          <Search className="h-4 w-4" /> 상세소개 준비중
-                        </Button>
                         <Button
                           size="sm"
                           className="gap-2 bg-primary text-white hover:bg-primary/90"
@@ -459,9 +478,14 @@ export default function PatientDoctors() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="gap-2 text-primary hover:bg-primary/10"
+                          className={`gap-2 ${isThanked
+                              ? "text-rose-600 bg-rose-50 hover:bg-rose-100"
+                              : "text-primary hover:bg-primary/10"
+                            }`}
+                          onClick={() => handleThankYouClick(doctor)}
                         >
-                          <Heart className="h-4 w-4" /> 감사해요
+                          <Heart className="h-4 w-4" fill={isThanked ? "currentColor" : "none"} />
+                          {isThanked ? "감사했어요" : "감사해요"}
                         </Button>
                       </div>
                     </CardContent>
@@ -482,7 +506,7 @@ export default function PatientDoctors() {
               {selectedDoctor && `${getDisplayName(selectedDoctor)} 의사님과의 진료 예약을 진행합니다.`}
             </DialogDescription>
           </DialogHeader>
-          
+
           <form onSubmit={handleAppointmentSubmit} className="space-y-6">
             {/* 환자 정보 */}
             {patientUser && (

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Patient, Examination, MedicalImage, AIAnalysisResult
+from .models import Patient, Examination, MedicalImage, AIAnalysisResult, VoiceOfCustomer
 
 
 class PatientSerializer(serializers.ModelSerializer):
@@ -118,3 +118,10 @@ class ExaminationDetailSerializer(serializers.ModelSerializer):
             'created_at', 'images'
         ]
         read_only_fields = ['id', 'created_at']
+
+class VoiceOfCustomerSerializer(serializers.ModelSerializer):
+    """고객의 소리 시리얼라이저"""
+    class Meta:
+        model = VoiceOfCustomer
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'is_resolved']

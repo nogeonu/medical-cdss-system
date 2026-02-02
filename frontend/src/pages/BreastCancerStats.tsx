@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { 
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
-  AreaChart, Area, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  AreaChart, Area
 } from 'recharts';
-import { 
-  Activity, TrendingUp, Calendar, Info, ShieldCheck, 
+import {
+  Activity, TrendingUp, Calendar, Info, ShieldCheck,
   AlertTriangle, Baby, MapPin, Search, ExternalLink, HeartPulse, CheckCircle2, CalendarDays,
   X as XIcon, Home
 } from 'lucide-react';
@@ -13,6 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -70,7 +71,7 @@ const STATIC_STATS = {
     { year: "2021", breast: 27120, thyroid: 25000, colorectal: 11800, stomach: 9200, lung: 9600, cervical: 3100 },
     { year: "2022", breast: 28500, thyroid: 27000, colorectal: 12100, stomach: 9100, lung: 10200, cervical: 3000 },
   ] as CancerTrend[],
-  
+
   age_specific_incidence: [
     { age_group: "20대", rate: 15.2 },
     { age_group: "30대", rate: 85.4 },
@@ -79,7 +80,7 @@ const STATIC_STATS = {
     { age_group: "60대", rate: 110.2 },
     { age_group: "70대+", rate: 65.8 },
   ] as AgeSpecificIncidence[],
-  
+
   screening_rates_by_region: [
     { region: "서울", rate: 65.2 },
     { region: "부산", rate: 63.8 },
@@ -92,7 +93,7 @@ const STATIC_STATS = {
     { region: "경기", rate: 65.8 },
     { region: "강원", rate: 60.2 },
   ] as ScreeningRate[],
-  
+
   survival_rates: [
     { period: "1993-1995", breast: 79.2, thyroid: 94.2, cervical: 77.5 },
     { period: "1996-2000", breast: 83.2, thyroid: 94.9, cervical: 80.0 },
@@ -101,7 +102,7 @@ const STATIC_STATS = {
     { period: "2011-2015", breast: 92.3, thyroid: 100.0, cervical: 79.9 },
     { period: "2016-2020", breast: 93.8, thyroid: 100.0, cervical: 80.5 },
   ] as SurvivalRate[],
-  
+
   risk_factors: [
     { factor: "음주 (매일 한잔)", risk_ratio: 1.10, category: "생활습관" },
     { factor: "음주 (매일 2~3잔)", risk_ratio: 1.50, category: "생활습관" },
@@ -142,7 +143,7 @@ const SectionCard: React.FC<{
   step: number;
   children: React.ReactNode;
 }> = ({ title, subtitle, step, children }) => (
-  <div 
+  <div
     className="group relative overflow-hidden rounded-2xl bg-white p-1 shadow-sm ring-1 ring-pink-100 transition-all hover:ring-pink-300 hover:shadow-md"
   >
     <div className="flex flex-col md:flex-row md:items-start gap-4 p-4">
@@ -172,8 +173,8 @@ const Pill: React.FC<{ children: React.ReactNode; tone?: "pink" | "rose" | "slat
     tone === "pink"
       ? "bg-pink-50 text-pink-700 border-pink-100"
       : tone === "rose"
-      ? "bg-rose-50 text-rose-800 border-rose-100"
-      : "bg-slate-100 text-slate-600 border-slate-200";
+        ? "bg-rose-50 text-rose-800 border-rose-100"
+        : "bg-slate-100 text-slate-600 border-slate-200";
   return <span className={cx("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold shadow-sm", styles)}>{children}</span>;
 };
 
@@ -278,6 +279,23 @@ export default function WomenHealthStats() {
   }, [showGuide]);
 
   const stats = STATIC_STATS;
+  const riskCategorySummary = useMemo(() => {
+    const grouped = stats.risk_factors.reduce<Record<string, RiskFactor[]>>((acc, factor) => {
+      if (!acc[factor.category]) {
+        acc[factor.category] = [];
+      }
+      acc[factor.category].push(factor);
+      return acc;
+    }, {});
+
+    return Object.entries(grouped)
+      .map(([category, factors]) => {
+        const average =
+          factors.reduce((sum, item) => sum + item.risk_ratio, 0) / factors.length;
+        return { category, factors, average };
+      })
+      .sort((a, b) => b.average - a.average);
+  }, [stats.risk_factors]);
 
   return (
     <div className="min-h-screen bg-slate-50/50 flex flex-col font-sans">
@@ -315,22 +333,22 @@ export default function WomenHealthStats() {
             </div>
             <h1 className="text-3xl font-black tracking-tight text-slate-900">여성 건강 데이터 인사이트</h1>
             <p className="text-slate-500 mt-2 max-w-2xl leading-relaxed">
-              공공 데이터 API를 활용하여 유방암을 비롯한 여성 주요 질환의 발생 추이, 위험 요인, 예방 현황을 
+              공공 데이터 API를 활용하여 유방암을 비롯한 여성 주요 질환의 발생 추이, 위험 요인, 예방 현황을
               종합적으로 시각화한 대시보드입니다.
             </p>
           </div>
           <div className="hidden md:flex flex-col items-end gap-2">
-             <Button 
-               className="bg-pink-600 hover:bg-pink-700 text-white gap-2 font-bold shadow-md hover:shadow-lg transition-all"
-               onClick={() => setShowGuide(true)}
-             >
-               <HeartPulse className="w-4 h-4 animate-pulse" />
-               자가검진 가이드
-             </Button>
-             <div className="text-right">
-               <div className="text-sm font-bold text-slate-700">Data Updated</div>
-               <div className="text-xs text-slate-400">2026.01.16</div>
-             </div>
+            <Button
+              className="bg-pink-600 hover:bg-pink-700 text-white gap-2 font-bold shadow-md hover:shadow-lg transition-all"
+              onClick={() => setShowGuide(true)}
+            >
+              <HeartPulse className="w-4 h-4 animate-pulse" />
+              자가검진 가이드
+            </Button>
+            <div className="text-right">
+              <div className="text-sm font-bold text-slate-700">Data Updated</div>
+              <div className="text-xs text-slate-400">2026.01.16</div>
+            </div>
           </div>
         </div>
 
@@ -371,14 +389,14 @@ export default function WomenHealthStats() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={stats.cancer_incidence_trends} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="year" tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                      <YAxis tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                      <Tooltip 
+                      <XAxis dataKey="year" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <Tooltip
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       />
                       <Legend />
-                      <Line type="monotone" dataKey="breast" name="유방암" stroke={COLORS.breast} strokeWidth={3} dot={{r: 4}} activeDot={{r: 8}} />
-                      <Line type="monotone" dataKey="thyroid" name="갑상선암" stroke={COLORS.thyroid} strokeWidth={2} dot={{r: 3}} />
+                      <Line type="monotone" dataKey="breast" name="유방암" stroke={COLORS.breast} strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
+                      <Line type="monotone" dataKey="thyroid" name="갑상선암" stroke={COLORS.thyroid} strokeWidth={2} dot={{ r: 3 }} />
                       <Line type="monotone" dataKey="colorectal" name="대장암" stroke={COLORS.colorectal} strokeWidth={2} dot={false} />
                       <Line type="monotone" dataKey="stomach" name="위암" stroke={COLORS.stomach} strokeWidth={2} dot={false} />
                       <Line type="monotone" dataKey="lung" name="폐암" stroke={COLORS.lung} strokeWidth={2} dot={false} />
@@ -415,8 +433,8 @@ export default function WomenHealthStats() {
                       <AreaChart data={stats.survival_rates}>
                         <defs>
                           <linearGradient id="colorBreast" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor={COLORS.breast} stopOpacity={0.3}/>
-                            <stop offset="95%" stopColor={COLORS.breast} stopOpacity={0}/>
+                            <stop offset="5%" stopColor={COLORS.breast} stopOpacity={0.3} />
+                            <stop offset="95%" stopColor={COLORS.breast} stopOpacity={0} />
                           </linearGradient>
                         </defs>
                         <XAxis dataKey="period" hide />
@@ -440,7 +458,7 @@ export default function WomenHealthStats() {
                     연령대별 유방암 발생률 (인구 10만 명당)
                   </CardTitle>
                   <CardDescription>
-                    한국 여성 유방암은 <span className="font-bold text-purple-600">40대와 50대</span>에서 가장 많이 발생합니다. 
+                    한국 여성 유방암은 <span className="font-bold text-purple-600">40대와 50대</span>에서 가장 많이 발생합니다.
                     (서구의 폐경 후 발병 패턴과 다름)
                   </CardDescription>
                 </CardHeader>
@@ -448,24 +466,24 @@ export default function WomenHealthStats() {
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={stats.age_specific_incidence} margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="age_group" tick={{fontSize: 12, fontWeight: 'bold'}} axisLine={false} tickLine={false} />
-                      <YAxis tick={{fontSize: 12}} axisLine={false} tickLine={false} />
-                      <Tooltip 
-                        cursor={{fill: '#f8fafc'}}
+                      <XAxis dataKey="age_group" tick={{ fontSize: 12, fontWeight: 'bold' }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12 }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        cursor={{ fill: '#f8fafc' }}
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                       />
                       <Bar dataKey="rate" name="발생률(명/10만명)" fill={COLORS.thyroid} radius={[8, 8, 0, 0]} barSize={60}>
                         {stats.age_specific_incidence.map((entry, index) => (
                           <React.Fragment key={`cell-${index}`}>
                             {/* 40, 50대 강조 */}
-                            {(entry.age_group === '40대' || entry.age_group === '50대') ? 
+                            {(entry.age_group === '40대' || entry.age_group === '50대') ?
                               <defs>
                                 <linearGradient id="highlightGradient" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="0%" stopColor="#9333ea" />
                                   <stop offset="100%" stopColor="#c084fc" />
                                 </linearGradient>
                               </defs>
-                            : null}
+                              : null}
                           </React.Fragment>
                         ))}
                       </Bar>
@@ -492,8 +510,8 @@ export default function WomenHealthStats() {
                     <BarChart layout="vertical" data={stats.screening_rates_by_region} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
                       <XAxis type="number" domain={[0, 100]} hide />
-                      <YAxis dataKey="region" type="category" tick={{fontSize: 12, fontWeight: 'bold'}} width={50} axisLine={false} tickLine={false} />
-                      <Tooltip 
+                      <YAxis dataKey="region" type="category" tick={{ fontSize: 12, fontWeight: 'bold' }} width={50} axisLine={false} tickLine={false} />
+                      <Tooltip
                         contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                         formatter={(value: number) => [`${value}%`, '수검률']}
                       />
@@ -509,39 +527,39 @@ export default function WomenHealthStats() {
                     <CardTitle className="text-blue-900">검진의 중요성</CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                     <div className="flex items-start gap-3">
-                       <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                         <ShieldCheck className="w-6 h-6" />
-                       </div>
-                       <div>
-                         <h4 className="font-bold text-blue-900">조기 발견 시 생존율 98%</h4>
-                         <p className="text-sm text-blue-700 mt-1">
-                           유방암은 0-1기에 발견하면 5년 생존율이 98% 이상이나, 
-                           4기 발견 시 30% 대로 급감합니다.
-                         </p>
-                       </div>
-                     </div>
-                     <div className="flex items-start gap-3">
-                       <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
-                         <Calendar className="w-6 h-6" />
-                       </div>
-                       <div>
-                         <h4 className="font-bold text-blue-900">40세 이상 2년 주기</h4>
-                         <p className="text-sm text-blue-700 mt-1">
-                           국가암검진 권고안에 따라 40세 이상 여성은 2년마다 맘모그래피 검진이 필수입니다.
-                         </p>
-                       </div>
-                     </div>
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                        <ShieldCheck className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-blue-900">조기 발견 시 생존율 98%</h4>
+                        <p className="text-sm text-blue-700 mt-1">
+                          유방암은 0-1기에 발견하면 5년 생존율이 98% 이상이나,
+                          4기 발견 시 30% 대로 급감합니다.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                        <Calendar className="w-6 h-6" />
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-blue-900">40세 이상 2년 주기</h4>
+                        <p className="text-sm text-blue-700 mt-1">
+                          국가암검진 권고안에 따라 40세 이상 여성은 2년마다 맘모그래피 검진이 필수입니다.
+                        </p>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </div>
             </div>
           </TabsContent>
-          
+
           {/* 4. Risk Factors Tab */}
           <TabsContent value="risk" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-               <Card className="border-none shadow-lg bg-white">
+              <Card className="border-none shadow-lg bg-white">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="w-5 h-5 text-rose-600" />
@@ -550,35 +568,60 @@ export default function WomenHealthStats() {
                   <CardDescription>가족력과 호르몬 요인이 가장 큰 영향을 미칩니다.</CardDescription>
                 </CardHeader>
                 <CardContent className="h-[400px]">
-                   <ResponsiveContainer width="100%" height="100%">
-                     <BarChart layout="vertical" data={stats.risk_factors} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
-                        <XAxis type="number" domain={[0, 3]} tickCount={4} />
-                        <YAxis dataKey="factor" type="category" width={120} tick={{fontSize: 11}} />
-                        <Tooltip />
-                        <Bar dataKey="risk_ratio" name="상대 위험도" fill={COLORS.risk} radius={[0, 4, 4, 0]} barSize={30} label={{ position: 'right', fill: '#64748b', fontSize: 12 }}>
-                        </Bar>
-                     </BarChart>
-                   </ResponsiveContainer>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart layout="vertical" data={stats.risk_factors} margin={{ top: 20, right: 30, left: 40, bottom: 20 }}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                      <XAxis type="number" domain={[0, 3]} tickCount={4} />
+                      <YAxis dataKey="factor" type="category" width={120} tick={{ fontSize: 11 }} />
+                      <Tooltip />
+                      <Bar dataKey="risk_ratio" name="상대 위험도" fill={COLORS.risk} radius={[0, 4, 4, 0]} barSize={30} label={{ position: 'right', fill: '#64748b', fontSize: 12 }}>
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
                 </CardContent>
-               </Card>
-               
-               <Card className="border-none shadow-lg bg-white">
-                 <CardHeader>
-                   <CardTitle>요인별 카테고리 분포</CardTitle>
-                 </CardHeader>
-                 <CardContent className="h-[400px] flex items-center justify-center">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={stats.risk_factors}>
-                        <PolarGrid />
-                        <PolarAngleAxis dataKey="category" />
-                        <PolarRadiusAxis />
-                        <Radar name="Risk Level" dataKey="risk_ratio" stroke={COLORS.risk} fill={COLORS.risk} fillOpacity={0.6} />
-                        <Tooltip />
-                      </RadarChart>
-                    </ResponsiveContainer>
-                 </CardContent>
-               </Card>
+              </Card>
+
+              <Card className="border-none shadow-lg bg-white">
+                <CardHeader>
+                  <CardTitle>요인별 카테고리 요약</CardTitle>
+                  <CardDescription>카테고리별 평균 위험비와 포함 요인을 표로 정리했습니다.</CardDescription>
+                </CardHeader>
+                <CardContent className="h-[400px]">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>카테고리</TableHead>
+                        <TableHead>요인</TableHead>
+                        <TableHead className="text-right">평균 위험비</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {riskCategorySummary.map((group) => (
+                        <TableRow key={group.category}>
+                          <TableCell className="font-bold text-slate-700 whitespace-nowrap">
+                            {group.category}
+                          </TableCell>
+                          <TableCell className="text-xs text-slate-600 align-top">
+                            <div className="space-y-1">
+                              {group.factors.map((factor) => (
+                                <div key={`${group.category}-${factor.factor}`} className="flex items-center gap-2">
+                                  <span className="font-medium">• {factor.factor}</span>
+                                  <span className="text-slate-400 text-[10px] bg-slate-100 px-1.5 py-0.5 rounded-full">
+                                    {factor.risk_ratio.toFixed(2)}x
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-semibold text-rose-600 whitespace-nowrap">
+                            {group.average.toFixed(2)}x
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
         </Tabs>
@@ -594,10 +637,10 @@ export default function WomenHealthStats() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {stats.references?.map((ref, idx) => (
-                <a 
-                  key={idx} 
-                  href={ref.url} 
-                  target="_blank" 
+                <a
+                  key={idx}
+                  href={ref.url}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-start p-3 rounded-lg bg-white border border-slate-200 hover:border-pink-300 hover:shadow-md transition-all group"
                 >
@@ -623,128 +666,128 @@ export default function WomenHealthStats() {
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto p-0 gap-0 border-0 bg-white shadow-2xl">
           {/* Header */}
           <div className="bg-gradient-to-r from-pink-500 to-rose-500 p-6 text-white sticky top-0 z-10">
-             <DialogHeader className="mb-0">
-               <div className="flex flex-wrap items-center gap-2 mb-2">
-                 <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">유방암 자가검진</Badge>
-                 <Badge className="bg-black/20 hover:bg-black/30 text-white border-0 backdrop-blur-sm">매월 1회 권장</Badge>
-               </div>
-               <DialogTitle className="text-2xl font-black tracking-tight text-white">
-                 자가검진 가이드 & 체크리스트
-               </DialogTitle>
-               <DialogDescription className="text-pink-100 mt-1">
-                 간단한 문진을 통해 현재 상태를 확인해보세요. 증상이 있다면 반드시 전문의와 상담하세요.
-               </DialogDescription>
-             </DialogHeader>
+            <DialogHeader className="mb-0">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-sm">유방암 자가검진</Badge>
+                <Badge className="bg-black/20 hover:bg-black/30 text-white border-0 backdrop-blur-sm">매월 1회 권장</Badge>
+              </div>
+              <DialogTitle className="text-2xl font-black tracking-tight text-white">
+                자가검진 가이드 & 체크리스트
+              </DialogTitle>
+              <DialogDescription className="text-pink-100 mt-1">
+                간단한 문진을 통해 현재 상태를 확인해보세요. 증상이 있다면 반드시 전문의와 상담하세요.
+              </DialogDescription>
+            </DialogHeader>
           </div>
 
           <div className="p-6 space-y-6">
-             {/* Key Info Cards */}
-             <div className="grid gap-3 sm:grid-cols-2">
-               <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100 flex items-start gap-3">
-                 <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
-                   <CalendarDays className="h-5 w-5" />
-                 </div>
-                 <div>
-                   <div className="text-sm font-bold text-slate-900">검사 시기(권장)</div>
-                   <p className="text-xs text-slate-500 mt-1 leading-snug">가임기: 생리 후 3~5일<br/>폐경 후: 매달 같은 날</p>
-                 </div>
-               </div>
-               <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100 flex items-start gap-3">
-                 <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
-                   <Info className="h-5 w-5" />
-                 </div>
-                 <div>
-                   <div className="text-sm font-bold text-slate-900">체크 방법</div>
-                   <p className="text-xs text-slate-500 mt-1 leading-snug">손가락 3개를 이용해<br/>동전 크기로 원을 그리며 촉진</p>
-                 </div>
-               </div>
-             </div>
-             
-             <div className="space-y-4">
-               {/* Step 1 */}
-               <SectionCard
-                 step={1}
-                 title="멍울 확인"
-                 subtitle="유방 깊숙한 곳이나 겨드랑이 부위에 딱딱하고 통증이 없는 멍울이 만져지는지 확인합니다."
-               >
-                 <YesNo
-                   label="통증이 거의 없고 단단한 멍울이 만져지나요?"
-                   value={lump}
-                   onChange={setLump}
-                 />
-               </SectionCard>
+            {/* Key Info Cards */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100 flex items-start gap-3">
+                <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
+                  <CalendarDays className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">검사 시기(권장)</div>
+                  <p className="text-xs text-slate-500 mt-1 leading-snug">가임기: 생리 후 3~5일<br />폐경 후: 매달 같은 날</p>
+                </div>
+              </div>
+              <div className="rounded-2xl bg-white p-4 shadow-sm border border-slate-100 flex items-start gap-3">
+                <div className="p-2 bg-pink-50 rounded-lg text-pink-600">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-bold text-slate-900">체크 방법</div>
+                  <p className="text-xs text-slate-500 mt-1 leading-snug">손가락 3개를 이용해<br />동전 크기로 원을 그리며 촉진</p>
+                </div>
+              </div>
+            </div>
 
-               {/* Step 2 */}
-               <SectionCard
-                 step={2}
-                 title="분비물 확인"
-                 subtitle="유두를 가볍게 짰을 때, 한쪽 유두에서만 피가 섞이거나 맑은 액체가 나오는지 관찰합니다."
-               >
-                 <YesNo
-                   label="한쪽 유두에서만 피/맑은 분비물이 나오나요?"
-                   value={discharge}
-                   onChange={setDischarge}
-                 />
-               </SectionCard>
+            <div className="space-y-4">
+              {/* Step 1 */}
+              <SectionCard
+                step={1}
+                title="멍울 확인"
+                subtitle="유방 깊숙한 곳이나 겨드랑이 부위에 딱딱하고 통증이 없는 멍울이 만져지는지 확인합니다."
+              >
+                <YesNo
+                  label="통증이 거의 없고 단단한 멍울이 만져지나요?"
+                  value={lump}
+                  onChange={setLump}
+                />
+              </SectionCard>
 
-               {/* Step 3 */}
-               <SectionCard
-                 step={3}
-                 title="외형 변화 확인"
-                 subtitle="거울 앞에서 팔을 들었다 내리며 피부 함몰, 유두 함몰, 귤껍질 같은 피부 변화를 확인합니다."
-               >
-                 <YesNo
-                   label="피부/유두 함몰이나 형태 변화가 새롭게 생겼나요?"
-                   value={skinChange}
-                   onChange={setSkinChange}
-                 />
-               </SectionCard>
-             </div>
+              {/* Step 2 */}
+              <SectionCard
+                step={2}
+                title="분비물 확인"
+                subtitle="유두를 가볍게 짰을 때, 한쪽 유두에서만 피가 섞이거나 맑은 액체가 나오는지 관찰합니다."
+              >
+                <YesNo
+                  label="한쪽 유두에서만 피/맑은 분비물이 나오나요?"
+                  value={discharge}
+                  onChange={setDischarge}
+                />
+              </SectionCard>
 
-             {/* Dynamic Result Card */}
-             <div className={cx(
-                 "rounded-2xl border p-5 shadow-sm transition-all duration-300",
-                 recommendation.tone === "rose"
-                   ? "border-rose-200 bg-rose-50"
-                   : recommendation.tone === "pink"
-                   ? "border-pink-200 bg-pink-50"
-                   : "border-slate-200 bg-slate-50"
-               )}>
-               <div className="flex items-start gap-3">
-                 <div className={cx("mt-0.5 p-1 rounded-full", 
-                    recommendation.tone === "rose" ? "bg-rose-200 text-rose-700" : 
+              {/* Step 3 */}
+              <SectionCard
+                step={3}
+                title="외형 변화 확인"
+                subtitle="거울 앞에서 팔을 들었다 내리며 피부 함몰, 유두 함몰, 귤껍질 같은 피부 변화를 확인합니다."
+              >
+                <YesNo
+                  label="피부/유두 함몰이나 형태 변화가 새롭게 생겼나요?"
+                  value={skinChange}
+                  onChange={setSkinChange}
+                />
+              </SectionCard>
+            </div>
+
+            {/* Dynamic Result Card */}
+            <div className={cx(
+              "rounded-2xl border p-5 shadow-sm transition-all duration-300",
+              recommendation.tone === "rose"
+                ? "border-rose-200 bg-rose-50"
+                : recommendation.tone === "pink"
+                  ? "border-pink-200 bg-pink-50"
+                  : "border-slate-200 bg-slate-50"
+            )}>
+              <div className="flex items-start gap-3">
+                <div className={cx("mt-0.5 p-1 rounded-full",
+                  recommendation.tone === "rose" ? "bg-rose-200 text-rose-700" :
                     recommendation.tone === "pink" ? "bg-pink-200 text-pink-700" : "bg-slate-200 text-slate-600"
-                 )}>
-                   {recommendation.tone === "rose" ? <AlertTriangle className="h-5 w-5" /> : 
+                )}>
+                  {recommendation.tone === "rose" ? <AlertTriangle className="h-5 w-5" /> :
                     recommendation.tone === "pink" ? <CheckCircle2 className="h-5 w-5" /> : <Info className="h-5 w-5" />}
-                 </div>
-                 <div>
-                   <div className={cx("text-base font-bold", 
-                      recommendation.tone === "rose" ? "text-rose-900" : 
+                </div>
+                <div>
+                  <div className={cx("text-base font-bold",
+                    recommendation.tone === "rose" ? "text-rose-900" :
                       recommendation.tone === "pink" ? "text-pink-900" : "text-slate-900"
-                   )}>
-                     {recommendation.title}
-                   </div>
-                   <p className={cx("mt-1 text-sm leading-relaxed", 
-                      recommendation.tone === "rose" ? "text-rose-800/80" : 
+                  )}>
+                    {recommendation.title}
+                  </div>
+                  <p className={cx("mt-1 text-sm leading-relaxed",
+                    recommendation.tone === "rose" ? "text-rose-800/80" :
                       recommendation.tone === "pink" ? "text-pink-800/80" : "text-slate-600"
-                   )}>
-                     {recommendation.desc}
-                   </p>
+                  )}>
+                    {recommendation.desc}
+                  </p>
 
-                   {recommendation.tone !== 'slate' && (
-                     <div className="mt-4 flex flex-wrap gap-2">
-                       <Pill tone={recommendation.tone === "pink" ? "pink" : "rose"}>
-                         선택된 ‘예’ 항목: {score}개
-                       </Pill>
-                       <Pill tone={recommendation.tone === "pink" ? "pink" : "rose"}>정기검진 병행 권장</Pill>
-                     </div>
-                   )}
-                 </div>
-               </div>
-             </div>
+                  {recommendation.tone !== 'slate' && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Pill tone={recommendation.tone === "pink" ? "pink" : "rose"}>
+                        선택된 ‘예’ 항목: {score}개
+                      </Pill>
+                      <Pill tone={recommendation.tone === "pink" ? "pink" : "rose"}>정기검진 병행 권장</Pill>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
-          
+
           <div className="bg-white p-4 border-t border-slate-100 flex justify-end sticky bottom-0 z-10">
             <Button onClick={() => setShowGuide(false)} className="bg-slate-900 hover:bg-slate-800 text-white font-bold px-8 rounded-xl shadow-lg shadow-slate-200">
               닫기

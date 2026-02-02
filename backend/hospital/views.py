@@ -3,11 +3,12 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q, Sum, Avg
-from .models import Patient, Examination, MedicalImage, AIAnalysisResult
+from .models import Patient, Examination, MedicalImage, AIAnalysisResult, VoiceOfCustomer
 from .serializers import (
     PatientSerializer, PatientDetailSerializer,
     ExaminationSerializer, ExaminationDetailSerializer,
-    MedicalImageSerializer, AIAnalysisResultSerializer
+    MedicalImageSerializer, AIAnalysisResultSerializer,
+    VoiceOfCustomerSerializer
 )
 
 
@@ -152,3 +153,13 @@ class AIAnalysisResultViewSet(viewsets.ReadOnlyModelViewSet):
         }
         
         return Response(stats)
+
+class VoiceOfCustomerViewSet(viewsets.ModelViewSet):
+    """고객의 소리 ViewSet"""
+    queryset = VoiceOfCustomer.objects.all()
+    serializer_class = VoiceOfCustomerSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['relation', 'type', 'is_resolved']
+    search_fields = ['name', 'phone', 'title', 'content']
+    ordering_fields = ['created_at']
+    ordering = ['-created_at']

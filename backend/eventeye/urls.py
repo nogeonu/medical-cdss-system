@@ -67,6 +67,7 @@ urlpatterns = [
     path('api/chat/', include('chatbot.urls')),
     path('api/messenger/', include('chat.urls')),
     path('api/lis/', include('lis.urls')),
+    path('api/hospital/', include('hospital.urls')),
     # Auth endpoints
     path('api/auth/login', auth_views.login, name='login'),
     path('api/auth/me', auth_views.me, name='me'),
