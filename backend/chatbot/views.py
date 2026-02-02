@@ -9,7 +9,6 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.utils import timezone
 from django.db import connection
-from rest_framework import serializers as drf_serializers
 
 import logging
 
@@ -60,24 +59,26 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
     hour = int(time_match.group(1))
     minute = int(time_match.group(2)) if time_match.group(2) else 0
 
-    # 3. Datetime 생성 (KST 연도 기준)
+    KST = ZoneInfo("Asia/Seoul")
+    now_korea = datetime.now(KST)
+    year = now_korea.year
     try:
-        from zoneinfo import ZoneInfo
-        now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
-        year = now_korea.year
-        
-        start_time = datetime(year, month, day, hour, minute, 0)
-        logger.info(f"[FIXED_V3] 챗봇 예약: 파싱 성공 start_time={start_time}")
+        # 명시적으로 한국 시간대(KST) aware datetime 생성
+        start_time = datetime(year, month, day, hour, minute, 0, tzinfo=KST)
+        logger.info(f"챗봇 예약: start_time={start_time.isoformat()} (KST aware)")
     except ValueError:
-        return False, "날짜 또는 시간 값이 올바르지 않습니다."
-    
-    # 현재 한국 시간과 비교 (검증 전 미리보기)
-    from zoneinfo import ZoneInfo
-    now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
-    logger.info(f"챗봇 예약: 현재 한국 시각={now_korea}, start_time={start_time} → 차이={(start_time - now_korea.replace(tzinfo=None)).total_seconds() / 60:.1f}분")
+        return False, "날짜 또는 시간 형식이 올바르지 않습니다."
 
-    # 종료 시간 계산 (30분 후)
     end_time = start_time + timedelta(minutes=30)
+
+    diff_min = (start_time - now_korea).total_seconds() / 60
+    logger.info(f"챗봇 예약: now_korea={now_korea.isoformat()}, start_time={start_time.isoformat()}, 차이={diff_min:.1f}분")
+
+    # 챗봇 단에서 과거 시간 미리 거절 (serializer까지 안 가도 됨)
+    if start_time < now_korea - timedelta(minutes=1):
+        today_str = now_korea.strftime('%Y년 %m월 %d일 %H:%M')
+        logger.warning(f"챗봇 예약: 과거 시간 거절 start={start_time.isoformat()} < now={now_korea.isoformat()}")
+        return False, f"지난 날짜나 시간으로는 예약을 잡을 수 없습니다. 현재 시각은 {today_str}(한국 시간)입니다. 오늘 이후의 날짜와 시간을 알려주세요."
 
     # auth_user에서 doctor_id로 의사 user id 조회
     try:
@@ -92,31 +93,34 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
         logger.warning(f"챗봇 예약: 의사 조회 실패 doctor_code={doctor_code}, error={e}")
         return False, ""
 
+    from django.contrib.auth import get_user_model
     from patients.models import Appointment
-    from patients.serializers import AppointmentSerializer
 
-    payload = {
-        "title": "챗봇 진료 예약",
-        "type": "예약",
-        "start_time": start_time.isoformat(),
-        "end_time": end_time.isoformat(),
-        "doctor": doctor_user_id,
-        "patient_id": patient_identifier,
-        "patient_name": patient_name or "",
-        "status": "scheduled",
-    }
-
-    serializer = AppointmentSerializer(data=payload, context={"request": None})
+    User = get_user_model()
     try:
-        serializer.is_valid(raise_exception=True)
-        apt = serializer.save()
-        date_str = apt.start_time.strftime("%Y년 %m월 %d일 %H:%M")
+        doctor_user = User.objects.get(pk=doctor_user_id)
+    except User.DoesNotExist:
+        return False, f"의사 코드({doctor_code})에 해당하는 사용자를 찾을 수 없습니다."
+
+    # USE_TZ=False이므로 naive datetime(한국 시간 의도)을 DB에 저장
+    start_naive = start_time.replace(tzinfo=None)
+    end_naive = end_time.replace(tzinfo=None)
+
+    try:
+        apt = Appointment(
+            title="챗봇 진료 예약",
+            type="예약",
+            start_time=start_naive,
+            end_time=end_naive,
+            doctor=doctor_user,
+            patient_identifier=patient_identifier,
+            patient_name=patient_name or "",
+            status="scheduled",
+        )
+        apt.save()
+        date_str = start_time.strftime("%Y년 %m월 %d일 %H:%M")
+        logger.info(f"챗봇 예약 생성 성공: ID={apt.id}, start={start_naive}, doctor={doctor_code}")
         return True, f"예약이 완료되었습니다. ({date_str})"
-    except drf_serializers.ValidationError as e:
-        err = e.detail.get("start_time") or e.detail.get("non_field_errors") or str(e.detail)
-        if isinstance(err, list):
-            err = err[0] if err else str(e.detail)
-        return False, err
     except Exception as e:
         logger.warning(f"챗봇 예약 생성 실패: {e}", exc_info=True)
         return False, "예약 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
