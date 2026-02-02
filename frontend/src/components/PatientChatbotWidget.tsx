@@ -49,13 +49,14 @@ export default function PatientChatbotWidget() {
         return metadata;
     };
 
-    const sendMessage = async (text: string) => {
+    const sendMessage = async (text: string, meta?: Record<string, unknown>) => {
         if (!text || loading) return;
 
         setMessages((prev) => [...prev, { role: "user", text }]);
         setLoading(true);
 
         try {
+            const metadata = { ...buildMetadata(), ...(meta ?? {}) };
             const res = await fetch(CHAT_API_URL, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -63,7 +64,7 @@ export default function PatientChatbotWidget() {
                     message: text,
                     session_id: sessionIdRef.current,
                     request_id: createId(),
-                    metadata: buildMetadata(),
+                    metadata,
                 }),
             });
 

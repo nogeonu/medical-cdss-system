@@ -13,6 +13,8 @@ export type ChatTable = {
 
 export type Msg = { role: "user" | "bot"; text: string; table?: ChatTable; buttons?: ChatButton[]; requestId?: string };
 
+export type SendMessage = (text: string, meta?: Record<string, unknown>) => void;
+
 export type FetchAvailableTimeSlots = (params: {
     date: string;
     doctorId?: string;
@@ -53,7 +55,7 @@ export function ChatTableCards({
     fetchAvailableTimeSlots,
 }: {
     table: ChatTable;
-    onSendMessage: (text: string) => void;
+    onSendMessage: SendMessage;
     fetchAvailableTimeSlots: FetchAvailableTimeSlots;
 }) {
     const headers = table.headers ?? [];
@@ -94,6 +96,8 @@ export function ChatTableCards({
                 const time = String(rowData[1] ?? "");
                 const department = String(rowData[2] ?? "");
                 const doctor = String(rowData[3] ?? "");
+                const title = String(rowData[4] ?? "");
+                const status = String(rowData[5] ?? "");
 
                 return (
                     <ReservationCard
@@ -102,6 +106,8 @@ export function ChatTableCards({
                         time={time}
                         department={department}
                         doctor={doctor}
+                        title={title}
+                        status={status}
                         rescheduleMode={table.reschedule_mode === true}
                         onSendMessage={onSendMessage}
                         fetchAvailableTimeSlots={fetchAvailableTimeSlots}
@@ -117,7 +123,7 @@ export function ChatActionButtons({
     onSendMessage,
 }: {
     buttons: ChatButton[];
-    onSendMessage: (text: string) => void;
+    onSendMessage: SendMessage;
 }) {
     return (
         <div className="space-y-2">
@@ -152,9 +158,14 @@ export function DoctorCard({
     title: string;
     doctorCode?: string;
     doctorId?: string;
-    onSendMessage: (text: string) => void;
+    onSendMessage: SendMessage;
     fetchAvailableTimeSlots: FetchAvailableTimeSlots;
 }) {
+    const codeMatch = doctorName.match(/\(D\d+\)/);
+    const codeFromName = codeMatch ? codeMatch[0].slice(1, -1) : undefined;
+    const trimmedName = codeMatch ? doctorName.replace(codeMatch[0], "").trim() : doctorName.trim();
+    const displayName = trimmedName || doctorName;
+    const displayCode = doctorCode ?? codeFromName;
     const [expanded, setExpanded] = useState(false);
     const [selectedDate, setSelectedDate] = useState("");
     const [selectedTime, setSelectedTime] = useState("");
@@ -181,9 +192,13 @@ export function DoctorCard({
         const [hour, minute] = selectedTime.split(":");
         const dateLabel = formatKoreanDate(selectedDate);
         // 의사 코드 포함해서 백엔드가 예약 생성할 수 있도록 함
-        const doctorInfo = doctorCode ? `${doctorName} (${doctorCode})` : doctorName;
+        const doctorInfo = displayCode ? `${displayName} (${displayCode})` : displayName;
         const message = `${doctorInfo} ${dateLabel} ${Number(hour)}시${Number(minute)}분 예약`;
-        onSendMessage(message);
+        onSendMessage(message, {
+            appointment_date: selectedDate,
+            appointment_time: selectedTime,
+            doctor_code: displayCode,
+        });
         setExpanded(false);
     };
 
@@ -191,7 +206,14 @@ export function DoctorCard({
         <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
             <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
-                    <div className="text-sm font-semibold text-slate-800">{doctorName}</div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-800">
+                        <span>{displayName}</span>
+                        {displayCode && (
+                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                {displayCode}
+                            </span>
+                        )}
+                    </div>
                     <div className="text-xs text-slate-500">{title || "-"}</div>
                 </div>
                 <button
@@ -266,6 +288,8 @@ export function ReservationCard({
     time,
     department,
     doctor,
+    title,
+    status,
     rescheduleMode,
     onSendMessage,
     fetchAvailableTimeSlots,
@@ -274,8 +298,10 @@ export function ReservationCard({
     time: string;
     department: string;
     doctor: string;
+    title?: string;
+    status?: string;
     rescheduleMode: boolean;
-    onSendMessage: (text: string) => void;
+    onSendMessage: SendMessage;
     fetchAvailableTimeSlots: FetchAvailableTimeSlots;
 }) {
     const [expanded, setExpanded] = useState(false);
@@ -312,13 +338,37 @@ export function ReservationCard({
         setExpanded(false);
     };
 
+    const statusLabelMap: Record<string, string> = {
+        scheduled: "예약됨",
+        completed: "완료",
+        cancelled: "취소",
+    };
+
+    const statusLabel = status ? statusLabelMap[status] ?? status : "";
+    const statusTone =
+        status === "cancelled"
+            ? "bg-rose-50 text-rose-600"
+            : status === "completed"
+                ? "bg-slate-100 text-slate-600"
+                : status
+                    ? "bg-blue-50 text-blue-700"
+                    : "";
+
     return (
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="flex items-start justify-between gap-2">
                 <div className="space-y-1">
-                    <div className="text-sm font-semibold text-slate-800">
-                        {time ? `${date} ${time}` : date}
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-slate-800">
+                            {time ? `${date} ${time}` : date}
+                        </div>
+                        {statusLabel && (
+                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${statusTone}`}>
+                                {statusLabel}
+                            </span>
+                        )}
                     </div>
+                    {title && <div className="text-xs text-slate-600">{title}</div>}
                     <div className="text-xs text-slate-500">{department}</div>
                     <div className="text-xs text-slate-500">{doctor}</div>
                 </div>

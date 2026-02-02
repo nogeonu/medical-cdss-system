@@ -1,6 +1,6 @@
 import re
-# Force deploy 2
 from datetime import datetime, timedelta
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 from rest_framework.decorators import api_view, permission_classes
@@ -13,10 +13,152 @@ from rest_framework import serializers as drf_serializers
 
 import logging
 
+from eventeye.doctor_utils import DEPARTMENT_ADMIN, DEPARTMENT_IMAGING, DEPARTMENT_RADIOLOGY
+
 logger = logging.getLogger(__name__)
 
 
-def _try_create_appointment_from_message(message: str, patient_identifier: str, patient_name: str = "") -> tuple[bool, str]:
+def _extract_doctor_code(message: str) -> Optional[str]:
+    match = re.search(r'\(D\d+\)', message)
+    if not match:
+        return None
+    return match.group(0).strip('()')
+
+
+def _parse_date_from_message(message: str) -> Optional[tuple[Optional[int], int, int]]:
+    iso_match = re.search(r'(\d{4})[./-](\d{1,2})[./-](\d{1,2})', message)
+    if iso_match:
+        year = int(iso_match.group(1))
+        month = int(iso_match.group(2))
+        day = int(iso_match.group(3))
+        return year, month, day
+
+    from chatbot.services.extraction import parse_date_only
+
+    legacy = parse_date_only(message)
+    if legacy:
+        return None, legacy[0], legacy[1]
+    return None
+
+
+def _parse_time_from_message(message: str) -> Optional[tuple[int, int]]:
+    colon_match = re.search(r'(\d{1,2})\s*:\s*(\d{1,2})', message)
+    if colon_match:
+        hour = int(colon_match.group(1))
+        minute = int(colon_match.group(2))
+        return hour, minute
+    time_match = re.search(r'(\d{1,2})시\s*(\d{1,2})?분?', message)
+    if not time_match:
+        return None
+    hour = int(time_match.group(1))
+    minute = int(time_match.group(2)) if time_match.group(2) else 0
+    return hour, minute
+
+
+def _build_doctor_table(limit: int = 12) -> Optional[dict]:
+    try:
+        query = [
+            "SELECT id, username, first_name, last_name, doctor_id, department",
+            "FROM auth_user",
+            "WHERE doctor_id IS NOT NULL AND doctor_id <> ''",
+            "AND doctor_id LIKE %s",
+            "AND department IS NOT NULL",
+            "AND department <> %s AND department <> %s AND department <> %s",
+            "ORDER BY first_name, last_name, username",
+            "LIMIT %s",
+        ]
+        params = ["D%", DEPARTMENT_ADMIN, DEPARTMENT_RADIOLOGY, DEPARTMENT_IMAGING, limit]
+
+        with connection.cursor() as cursor:
+            cursor.execute(" ".join(query), params)
+            rows = cursor.fetchall()
+    except Exception as e:
+        logger.warning(f"챗봇 예약: 의료진 목록 조회 실패 error={e}")
+        return None
+
+    if not rows:
+        return None
+
+    table_rows: list[list[str]] = []
+    doctor_metadata: list[dict] = []
+
+    for row in rows:
+        doctor_user_id, username, first_name, last_name, doctor_code, department = row
+        display_name = " ".join(filter(None, [last_name, first_name])).strip() or username
+        label = f"{display_name} ({doctor_code})" if doctor_code else display_name
+        table_rows.append([label, department or "의료진"])
+        doctor_metadata.append({
+            "doctor_code": doctor_code,
+            "doctor_id": str(doctor_user_id),
+        })
+
+    return {
+        "headers": ["의사", "진료과"],
+        "rows": table_rows,
+        "doctor_metadata": doctor_metadata,
+    }
+
+
+def _format_doctor_display(apt) -> str:
+    doc = apt.doctor_name or apt.doctor_username or ""
+    if apt.doctor_code and apt.doctor_code not in doc:
+        return f"{doc} ({apt.doctor_code})".strip()
+    return doc or apt.doctor_code or ""
+
+
+def _build_appointments_table(appointments) -> Optional[dict]:
+    if not appointments:
+        return None
+
+    rows: list[list[str]] = []
+    for apt in appointments:
+        start = apt.start_time
+        date_str = start.strftime("%Y-%m-%d")
+        time_str = start.strftime("%H:%M")
+        dept = apt.doctor_department or ""
+        doc = _format_doctor_display(apt)
+        title = apt.title or "진료"
+        status = apt.status or "scheduled"
+        rows.append([date_str, time_str, dept, doc, title, status])
+
+    return {
+        "headers": ["예약일", "시간", "진료과", "의료진", "예약명", "상태"],
+        "rows": rows,
+    }
+
+
+def _get_appointments_payload(patient_identifier: str) -> tuple[str, Optional[dict]]:
+    """환자 ID로 예약 목록 조회 후 안내 문구 + 테이블 반환"""
+    try:
+        from patients.models import Appointment
+        now = timezone.now()
+
+        all_appointments = Appointment.objects.filter(
+            patient_identifier=patient_identifier.strip()
+        ).order_by('start_time')
+        logger.info(f"챗봇 예약 조회 - 환자 {patient_identifier}: 전체 {all_appointments.count()}건, 현재시각: {now}")
+
+        qs = all_appointments.exclude(status='cancelled').filter(start_time__gte=now)
+        appointments = list(qs[:20])
+
+        if not appointments:
+            return f"등록된 예약 내역이 없습니다. (환자 ID: {patient_identifier})", None
+
+        table = _build_appointments_table(appointments)
+        return f"예약 내역입니다. (총 {len(appointments)}건)", table
+    except Exception as e:
+        logger.warning(f"챗봇 예약 내역 조회 실패: patient_identifier={patient_identifier}, error={e}")
+        return "예약 내역을 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.", None
+
+def _try_create_appointment_from_message(
+    message: str,
+    patient_identifier: str,
+    patient_name: str = "",
+    *,
+    doctor_code_override: Optional[str] = None,
+    date_tuple_override: Optional[tuple[Optional[int], int, int]] = None,
+    time_tuple_override: Optional[tuple[int, int]] = None,
+) -> tuple[bool, str]:
     """
     메시지에서 "OO (D2026004) 2. 5. (목) 13시30분 예약" 또는 "2.5(목) 14시10분" 형식을 파싱해 예약 생성.
     점(.) 날짜 패턴(2.5, 2.5(목))도 인식하여 날짜+시간이 정상 파싱되도록 함 (과거 판정 이슈 방지).
@@ -25,61 +167,32 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
     if not patient_identifier:
         return False, "예약을 하려면 로그인(환자 번호) 후 이용해 주세요."
 
-    # 의사 코드: (D2026004) 또는 (D2026)
-    doctor_code_match = re.search(r'\(D\d+\)', message)
-    if not doctor_code_match:
-        return False, ""
+    doctor_code = doctor_code_override or _extract_doctor_code(message)
+    if not doctor_code:
+        return False, "예약할 의료진을 먼저 선택해 주세요."
 
-    doctor_code = doctor_code_match.group(0).strip('()')  # D2026004
-
-    # 날짜/시간 파싱 (점 날짜 패턴 포함 - 인라인 구현)
-    # [FIXED] Force update logic here to ensure deployment picks it up
-    
-    # 1. 날짜 패턴 정의 (keywords.py 내용 인라인)
-    DATE_PATTERNS = [
-        re.compile(r'(\d{1,2})\.\s*(\d{1,2})\.'), # 2. 5.
-        re.compile(r'(\d{1,2})\.(\d{1,2})(?:\s*\([월화수목금토일]\))?'), # 2.5(목) or 2.5
-        re.compile(r'(\d{1,2})월\s*(\d{1,2})일'), # 2월 5일
-    ]
-
-    month, day = None, None
-    for pattern in DATE_PATTERNS:
-        match = pattern.search(message)
-        if match:
-             month, day = int(match.group(1)), int(match.group(2))
-             break
-    
-    if month is None or day is None:
+    date_tuple = date_tuple_override or _parse_date_from_message(message)
+    if not date_tuple:
         return False, "날짜 형식을 인식할 수 없습니다. (예: 2.5, 2월 5일)"
 
-    # 2. 시간 파싱
-    time_match = re.search(r'(\d{1,2})시\s*(\d{1,2})?분?', message)
-    if not time_match:
+    time_tuple = time_tuple_override or _parse_time_from_message(message)
+    if not time_tuple:
         return False, "시간 형식을 인식할 수 없습니다. (예: 14시 30분)"
 
-    hour = int(time_match.group(1))
-    minute = int(time_match.group(2)) if time_match.group(2) else 0
+    year, month, day = date_tuple
+    hour, minute = time_tuple
 
-    # 3. Datetime 생성 (KST 연도 기준)
     try:
-        from zoneinfo import ZoneInfo
         now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
-        year = now_korea.year
-        
+        if year is None:
+            year = now_korea.year
         start_time = datetime(year, month, day, hour, minute, 0)
-        logger.info(f"[FIXED_V3] 챗봇 예약: 파싱 성공 start_time={start_time}")
+        logger.info(f"챗봇 예약: 파싱 성공 start_time={start_time}")
     except ValueError:
         return False, "날짜 또는 시간 값이 올바르지 않습니다."
-    
-    # 현재 한국 시간과 비교 (검증 전 미리보기)
-    from zoneinfo import ZoneInfo
-    now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
-    logger.info(f"챗봇 예약: 현재 한국 시각={now_korea}, start_time={start_time} → 차이={(start_time - now_korea.replace(tzinfo=None)).total_seconds() / 60:.1f}분")
 
-    # 종료 시간 계산 (30분 후)
     end_time = start_time + timedelta(minutes=30)
 
-    # auth_user에서 doctor_id로 의사 user id 조회
     try:
         with connection.cursor() as cursor:
             cursor.execute("SELECT id FROM auth_user WHERE doctor_id = %s", [doctor_code])
@@ -90,10 +203,23 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
         doctor_user_id = row[0]
     except Exception as e:
         logger.warning(f"챗봇 예약: 의사 조회 실패 doctor_code={doctor_code}, error={e}")
-        return False, ""
+        return False, "의료진 정보를 불러오는 중 오류가 발생했습니다."
 
-    from patients.models import Appointment
+    from patients.models import Appointment, Patient
     from patients.serializers import AppointmentSerializer
+
+    conflict_exists = Appointment.objects.filter(
+        doctor_id=doctor_user_id,
+        start_time=start_time,
+    ).exclude(status='cancelled').exists()
+    if conflict_exists:
+        return False, "해당 시간에는 이미 예약이 있습니다. 다른 시간을 선택해 주세요."
+
+    patient_obj = None
+    try:
+        patient_obj = Patient.objects.filter(patient_id=patient_identifier).first()
+    except Exception:
+        patient_obj = None
 
     payload = {
         "title": "챗봇 진료 예약",
@@ -105,6 +231,8 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
         "patient_name": patient_name or "",
         "status": "scheduled",
     }
+    if patient_obj:
+        payload["patient"] = patient_obj.id
 
     serializer = AppointmentSerializer(data=payload, context={"request": None})
     try:
@@ -122,40 +250,6 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
         return False, "예약 생성 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
 
 
-def _get_appointments_reply(patient_identifier: str) -> str:
-    """환자 ID로 예약 목록 조회 후 안내 문구 반환"""
-    try:
-        from patients.models import Appointment
-        now = timezone.now()
-        
-        # 디버깅: 모든 예약 조회 (취소 포함, 과거 포함)
-        all_appointments = Appointment.objects.filter(
-            patient_identifier=patient_identifier.strip()
-        ).order_by('start_time')
-        logger.info(f"챗봇 예약 조회 - 환자 {patient_identifier}: 전체 {all_appointments.count()}건, 현재시각: {now}")
-        
-        # 실제 응답용: 취소 제외 + 미래 예약만
-        qs = all_appointments.exclude(status='cancelled').filter(start_time__gte=now)
-        appointments = list(qs[:20])
-        
-        if not appointments:
-            return f"등록된 예약 내역이 없습니다. (환자 ID: {patient_identifier})"
-        lines = [f"예약 내역입니다. (총 {len(appointments)}건)\n"]
-        for i, apt in enumerate(appointments, 1):
-            start = apt.start_time
-            date_str = start.strftime("%Y-%m-%d")  # 2026-03-04 형식으로 통일
-            time_str = start.strftime("%H:%M")
-            dept = apt.doctor_department or ""
-            doc = apt.doctor_name or apt.doctor_username or ""
-            title = apt.title or "진료"
-            status_str = f" [{apt.status}]" if apt.status != 'scheduled' else ""
-            lines.append(f"{i}. {date_str} {time_str} - {dept} {doc} ({title}){status_str}")
-        return "\n".join(lines)
-    except Exception as e:
-        logger.warning(f"챗봇 예약 내역 조회 실패: patient_identifier={patient_identifier}, error={e}")
-        return "예약 내역을 불러오는 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
-
-
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def chat(request):
@@ -166,35 +260,93 @@ def chat(request):
         metadata = request.data.get('metadata') or {}
         patient_identifier = (metadata.get('patient_identifier') or metadata.get('patient_id') or '').strip()
         
-        # Debugging date parsing logic
         logger.info(f"챗봇 요청 수신: message='{message}'")
-        if '예약' in message:
-             logger.info(f"챗봇 예약 로직 진입")
 
-        # 예약 내역/확인/조회 요청 → 실제 DB 조회
-        if any(kw in message for kw in ('예약 내역', '예약 확인', '예약 조회', '예약 목록', '예약 있어', '예약 없어', '예약 알려')):
-            if patient_identifier:
-                response_message = _get_appointments_reply(patient_identifier)
-            else:
+        history_keywords = ('예약 내역', '예약 확인', '예약 조회', '예약 목록', '예약 있어', '예약 없어', '예약 알려')
+        is_history_request = any(kw in message for kw in history_keywords)
+        is_reservation_request = '예약' in message
+
+        if is_history_request:
+            if not patient_identifier:
                 response_message = "예약 내역을 보려면 로그인(환자 번호) 후 이용해 주세요."
+                return Response({
+                    'reply': response_message,
+                    'message': response_message,
+                    'conversation_id': conversation_id,
+                    'success': True,
+                }, status=status.HTTP_200_OK)
+
+            response_message, table = _get_appointments_payload(patient_identifier)
             return Response({
                 'reply': response_message,
                 'message': response_message,
                 'conversation_id': conversation_id,
                 'success': True,
+                'table': table,
             }, status=status.HTTP_200_OK)
 
-        # "OO (D2026004) 2. 5. (목) 13시30분 예약" 형식 → 실제 예약 생성 시도
-        if '예약' in message and not any(kw in message for kw in ('내역', '확인', '조회', '목록', '있어', '없어', '알려')):
-            patient_name = (metadata.get('patient_name') or metadata.get('name') or '').strip()
-            ok, response_message = _try_create_appointment_from_message(message, patient_identifier, patient_name)
-            if response_message:
+        if is_reservation_request and not is_history_request:
+            if not patient_identifier:
+                response_message = "예약을 하려면 로그인(환자 번호) 후 이용해 주세요."
                 return Response({
                     'reply': response_message,
                     'message': response_message,
                     'conversation_id': conversation_id,
-                    'success': ok,
+                    'success': False,
                 }, status=status.HTTP_200_OK)
+
+            meta_date = (metadata.get('appointment_date') or '').strip()
+            meta_time = (metadata.get('appointment_time') or '').strip()
+            meta_doctor_code = (metadata.get('doctor_code') or '').strip()
+
+            doctor_code = meta_doctor_code or _extract_doctor_code(message)
+            date_source = meta_date or message
+            time_source = meta_time or message
+            date_tuple = _parse_date_from_message(date_source)
+            time_tuple = _parse_time_from_message(time_source)
+
+            if doctor_code and date_tuple and time_tuple:
+                patient_name = (metadata.get('patient_name') or metadata.get('name') or '').strip()
+                ok, response_message = _try_create_appointment_from_message(
+                    message,
+                    patient_identifier,
+                    patient_name,
+                    doctor_code_override=doctor_code,
+                    date_tuple_override=date_tuple,
+                    time_tuple_override=time_tuple,
+                )
+                if ok:
+                    summary_message, table = _get_appointments_payload(patient_identifier)
+                    combined_message = f"{response_message}\n\n{summary_message}" if summary_message else response_message
+                    return Response({
+                        'reply': combined_message,
+                        'message': combined_message,
+                        'conversation_id': conversation_id,
+                        'success': True,
+                        'table': table,
+                    }, status=status.HTTP_200_OK)
+                return Response({
+                    'reply': response_message,
+                    'message': response_message,
+                    'conversation_id': conversation_id,
+                    'success': False,
+                }, status=status.HTTP_200_OK)
+
+            table = _build_doctor_table()
+            response_message = "예약할 의료진과 날짜/시간을 선택해 주세요."
+            if not table:
+                response_message = "예약할 의료진 정보를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+            buttons = [
+                {"text": "예약 내역 보기", "action": "예약 내역"},
+            ]
+            return Response({
+                'reply': response_message,
+                'message': response_message,
+                'conversation_id': conversation_id,
+                'success': True,
+                'table': table,
+                'buttons': buttons,
+            }, status=status.HTTP_200_OK)
 
         # 기본 응답 (임시)
         response_message = "안녕하세요! 건양대학교병원 챗봇입니다. 무엇을 도와드릴까요?"
@@ -245,6 +397,53 @@ def chat(request):
             'error': '오류가 발생했습니다. 잠시 후 다시 시도해주세요.',
             'success': False,
         }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def available_time_slots(request):
+    """예약 가능한 시간 조회 (의료진/날짜 기준)"""
+    try:
+        payload = request.data or {}
+        date_str = (payload.get('date') or '').strip()
+        doctor_id_raw = payload.get('doctor_id')
+        doctor_code = (payload.get('doctor_code') or '').strip()
+
+        if not date_str:
+            return Response({'status': 'error', 'detail': 'date is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            date_obj = datetime.strptime(date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return Response({'status': 'error', 'detail': 'invalid date format'}, status=status.HTTP_400_BAD_REQUEST)
+
+        from patients.models import Appointment
+
+        qs = Appointment.objects.exclude(status='cancelled')
+        if doctor_id_raw:
+            try:
+                doctor_id = int(doctor_id_raw)
+            except (TypeError, ValueError):
+                doctor_id = doctor_id_raw
+            qs = qs.filter(doctor_id=doctor_id)
+        elif doctor_code:
+            qs = qs.filter(doctor_code=doctor_code)
+        else:
+            return Response({'status': 'error', 'detail': 'doctor_id or doctor_code required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        start_of_day = datetime(date_obj.year, date_obj.month, date_obj.day, 0, 0, 0)
+        end_of_day = start_of_day + timedelta(days=1)
+        qs = qs.filter(start_time__gte=start_of_day, start_time__lt=end_of_day)
+
+        booked_times = sorted({apt.start_time.strftime("%H:%M") for apt in qs})
+
+        return Response({
+            'status': 'ok',
+            'booked_times': booked_times,
+        }, status=status.HTTP_200_OK)
+    except Exception as e:
+        logger.error(f"예약 시간 조회 오류: {e}", exc_info=True)
+        return Response({'status': 'error', 'detail': 'internal error'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 @api_view(['POST'])
 @permission_classes([AllowAny])

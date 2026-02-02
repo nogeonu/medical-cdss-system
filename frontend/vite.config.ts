@@ -37,14 +37,14 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     proxy: {
-      '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true,
-      },
       '/api/chatbot': {
         target: 'http://localhost:8001',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/chatbot/, '/api/chat'),
+      },
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
       },
       '/ws': {
         target: 'http://localhost:8000',
