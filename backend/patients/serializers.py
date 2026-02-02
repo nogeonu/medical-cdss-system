@@ -119,11 +119,6 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 class AppointmentSerializer(serializers.ModelSerializer):
     doctor_display = serializers.SerializerMethodField()
     patient_display = serializers.SerializerMethodField()
-    patient_identifier = serializers.CharField(
-        write_only=True,
-        required=False,
-        allow_blank=True,
-    )
     patient_id = serializers.CharField(
         source='patient_identifier',
         allow_blank=True,
