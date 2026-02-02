@@ -19,8 +19,8 @@ if (typeof window !== 'undefined') {
 }
 
 // OpenSeadragon 동적 로드 (폴리필 이후 실행 보장)
-let _osdPromise: Promise<typeof import('openseadragon')> | null = null;
-function loadOpenSeadragon() {
+let _osdPromise: Promise<unknown> | null = null;
+function loadOpenSeadragon(): Promise<unknown> {
   if (!_osdPromise) {
     _osdPromise = import('openseadragon');
   }
@@ -98,7 +98,8 @@ export default function PathologyHighResViewer({
 
     // 다이얼로그 레이아웃 완료 후 뷰어 초기화 (컨테이너 크기 확보)
     const timer = setTimeout(() => {
-      if (!containerRef.current) return; // 컨테이너 없으면 뷰어만 스킵, 위 8초 타임아웃으로 안내
+      const containerEl = containerRef.current;
+      if (!containerEl) return; // 컨테이너 없으면 뷰어만 스킵, 위 8초 타임아웃으로 안내
 
       loadOpenSeadragon()
         .then((mod) => {
@@ -110,7 +111,7 @@ export default function PathologyHighResViewer({
             return;
           }
           const viewer = (OSD as CallableFunction)({
-            element: containerRef.current,
+            element: containerEl,
             tileSources: effectiveDziUrl,
             prefixUrl: 'https://openseadragon.github.io/openseadragon/images/',
             showNavigator: true,
