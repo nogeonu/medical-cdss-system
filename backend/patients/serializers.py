@@ -173,8 +173,9 @@ class AppointmentSerializer(serializers.ModelSerializer):
             now_korea = _now_korea_naive()
             start_korea = _as_korea_naive(start)
             if start_korea < now_korea:
+                today_str = now_korea.strftime('%Y년 %m월 %d일 %H:%M')
                 raise serializers.ValidationError({
-                    'start_time': '지난 날짜나 시간으로는 예약을 잡을 수 없습니다. 오늘 이후의 날짜와 시간을 알려주세요.'
+                    'start_time': f'지난 날짜나 시간으로는 예약을 잡을 수 없습니다. 현재 시각은 {today_str}(한국 시간)입니다. 오늘 이후의 날짜와 시간을 알려주세요.'
                 })
         return attrs
 

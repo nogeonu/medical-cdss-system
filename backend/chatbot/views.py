@@ -65,7 +65,11 @@ def chat(request):
         if '병원 위치' in message or '위치' in message:
             response_message = "건양대학교병원은 대전광역시 서구 관저동에 위치해 있습니다."
         elif ('예약' in message or '진료' in message) and '내역' not in message and '확인' not in message and '조회' not in message:
-            response_message = "진료 예약은 병원 홈페이지 또는 전화로 가능합니다. 예약 내역이 필요하시면 '예약 내역'이라고 말씀해 주세요."
+            from datetime import datetime
+            from zoneinfo import ZoneInfo
+            now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
+            today_str = now_korea.strftime('%Y년 %m월 %d일 %H:%M')
+            response_message = f"진료 예약은 병원 홈페이지 또는 전화로 가능합니다. 예약은 오늘 이후 날짜와 시간만 선택할 수 있습니다. (현재 시각: {today_str} 한국 시간) 예약 내역이 필요하시면 '예약 내역'이라고 말씀해 주세요."
         elif '전화' in message or '연락처' in message:
             response_message = "건양대학교병원 전화번호는 042-600-9000입니다."
 
