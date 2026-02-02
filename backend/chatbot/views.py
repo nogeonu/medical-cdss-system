@@ -76,6 +76,9 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
     now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
     logger.info(f"챗봇 예약: 현재 한국 시각={now_korea}, start_time={start_time} → 차이={(start_time - now_korea.replace(tzinfo=None)).total_seconds() / 60:.1f}분")
 
+    # 종료 시간 계산 (30분 후)
+    end_time = start_time + timedelta(minutes=30)
+
     # auth_user에서 doctor_id로 의사 user id 조회
     try:
         with connection.cursor() as cursor:
