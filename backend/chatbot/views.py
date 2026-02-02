@@ -17,7 +17,8 @@ logger = logging.getLogger(__name__)
 
 def _try_create_appointment_from_message(message: str, patient_identifier: str, patient_name: str = "") -> tuple[bool, str]:
     """
-    메시지에서 "OO (D2026004) 2. 5. (목) 13시30분 예약" 형식을 파싱해 예약 생성.
+    메시지에서 "OO (D2026004) 2. 5. (목) 13시30분 예약" 또는 "2.5(목) 14시10분" 형식을 파싱해 예약 생성.
+    점(.) 날짜 패턴(2.5, 2.5(목))도 인식하여 날짜+시간이 정상 파싱되도록 함 (과거 판정 이슈 방지).
     반환: (성공 여부, 응답 메시지)
     """
     if not patient_identifier:
@@ -30,8 +31,12 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
 
     doctor_code = doctor_code_match.group(0).strip('()')  # D2026004
 
-    # 날짜: "2. 5." 또는 "2. 5. (목)" 또는 "2월 5일"
-    date_match = re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', message) or re.search(r'(\d{1,2})월\s*(\d{1,2})일', message)
+    # 날짜: "2. 5." / "2. 5. (목)" / "2.5(목)" / "2.5" (점 날짜) / "2월 5일"
+    date_match = (
+        re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', message)
+        or re.search(r'(\d{1,2})\.(\d{1,2})(?:\s*\([월화수목금토일]\))?', message)  # 2.5(목) 또는 2.5
+        or re.search(r'(\d{1,2})월\s*(\d{1,2})일', message)
+    )
     if not date_match:
         return False, ""
 
