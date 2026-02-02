@@ -3,7 +3,7 @@ from rest_framework import viewsets, filters, status, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.authentication import SessionAuthentication
+from rest_framework.authentication import SessionAuthentication, TokenAuthentication
 from django_filters.rest_framework import DjangoFilterBackend
 from django.http import Http404
 
@@ -209,10 +209,10 @@ class MedicalRecordViewSet(viewsets.ModelViewSet):
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
-    """예약 ViewSet - 부서별 필터링 적용"""
+    """예약 ViewSet - 부서별 필터링 적용 (웹·모바일 앱 공통 사용)"""
     serializer_class = AppointmentSerializer
     permission_classes = [permissions.AllowAny]
-    authentication_classes = [SessionAuthentication]
+    authentication_classes = [SessionAuthentication, TokenAuthentication]  # 웹(세션) + 모바일(토큰) 모두 지원
     ordering = ['start_time']
     pagination_class = None
 
@@ -223,11 +223,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         queryset = Appointment.objects.select_related('patient', 'doctor', 'created_by').exclude(status='cancelled')
         
         # 부서별 필터링: 의료진(Staff)만 적용, 원무과가 아니면 자신의 부서 예약만
-        # 환자 계정(PatientUser)이거나 인증 없으면 부서 필터링 제외
+        # 환자 계정(PatientUser)이거나 인증 없으면 부서 필터링 제외 (웹·모바일 공통)
         if self.request.user.is_authenticated:
-            # 환자 계정 확인: User 모델에 is_staff=False이거나 특정 권한이 없으면 환자로 간주
-            # 또는 PatientUser 테이블 확인 (hasattr로 patient_id 존재 여부)
-            is_patient_account = hasattr(self.request.user, 'patient_id') or (not self.request.user.is_staff)
+            # 환자 계정 판별: PatientUser 모델은 patient_id 속성이 있고 is_staff=False
+            # 의료진(Staff User)는 is_staff=True
+            from patients.models import PatientUser
+            is_patient_account = isinstance(self.request.user, PatientUser) or (
+                hasattr(self.request.user, 'patient_id') and not self.request.user.is_staff
+            )
             
             if not is_patient_account:
                 # 의료진: 부서별 필터링 적용
@@ -235,9 +238,12 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                     user_department = get_department(self.request.user.id)
                     if user_department and user_department != "원무과":
                         queryset = queryset.filter(doctor_department=user_department)
+                        logger.info(f"예약 조회 - 부서별 필터링 적용: user_id={self.request.user.id}, department={user_department}")
                 except Exception as e:
                     logger.warning(f"예약 조회 - 부서 정보 가져오기 실패 (user_id: {self.request.user.id}): {e}")
                     # 오류 발생 시 필터링 없이 전체 조회
+            else:
+                logger.info(f"예약 조회 - 환자 계정: patient_id={getattr(self.request.user, 'patient_id', None)}, 부서 필터링 제외")
         
         # 추가 필터링
         patient_id = self.request.query_params.get('patient_id')
