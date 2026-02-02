@@ -13,21 +13,29 @@ def _get_appointments_reply(patient_identifier: str) -> str:
     try:
         from patients.models import Appointment
         now = timezone.now()
-        qs = Appointment.objects.filter(
+        
+        # 디버깅: 모든 예약 조회 (취소 포함, 과거 포함)
+        all_appointments = Appointment.objects.filter(
             patient_identifier=patient_identifier.strip()
-        ).exclude(status='cancelled').filter(start_time__gte=now).order_by('start_time')
+        ).order_by('start_time')
+        logger.info(f"챗봇 예약 조회 - 환자 {patient_identifier}: 전체 {all_appointments.count()}건, 현재시각: {now}")
+        
+        # 실제 응답용: 취소 제외 + 미래 예약만
+        qs = all_appointments.exclude(status='cancelled').filter(start_time__gte=now)
         appointments = list(qs[:20])
+        
         if not appointments:
             return f"등록된 예약 내역이 없습니다. (환자 ID: {patient_identifier})"
-        lines = ["예약 내역입니다.\n"]
+        lines = [f"예약 내역입니다. (총 {len(appointments)}건)\n"]
         for i, apt in enumerate(appointments, 1):
             start = apt.start_time
-            date_str = start.strftime("%Y년 %m월 %d일")
+            date_str = start.strftime("%Y-%m-%d")  # 2026-03-04 형식으로 통일
             time_str = start.strftime("%H:%M")
             dept = apt.doctor_department or ""
             doc = apt.doctor_name or apt.doctor_username or ""
             title = apt.title or "진료"
-            lines.append(f"{i}. {date_str} {time_str} - {dept} {doc} ({title})")
+            status_str = f" [{apt.status}]" if apt.status != 'scheduled' else ""
+            lines.append(f"{i}. {date_str} {time_str} - {dept} {doc} ({title}){status_str}")
         return "\n".join(lines)
     except Exception as e:
         logger.warning(f"챗봇 예약 내역 조회 실패: patient_identifier={patient_identifier}, error={e}")
