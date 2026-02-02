@@ -119,11 +119,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 class AppointmentSerializer(serializers.ModelSerializer):
     doctor_display = serializers.SerializerMethodField()
     patient_display = serializers.SerializerMethodField()
-    patient_identifier = serializers.CharField(
-        write_only=True,
-        required=False,
-        allow_blank=True,
-    )
+    # API는 patient_id로 받고 모델 patient_identifier에 저장 (웹/모바일 통일)
     patient_id = serializers.CharField(
         source='patient_identifier',
         allow_blank=True,
@@ -180,8 +176,12 @@ class AppointmentSerializer(serializers.ModelSerializer):
             start_korea = _as_korea(start)
             if start_korea < now_korea - timedelta(minutes=1):
                 today_str = now_korea.strftime('%Y년 %m월 %d일 %H:%M')
+                logger.warning(
+                    "예약 지난 시간 거절: start_raw=%s, start_korea=%s, now_korea=%s (서버는 naive를 한국 시간으로 해석)",
+                    start, start_korea, now_korea,
+                )
                 raise serializers.ValidationError({
-                    'start_time': f'지난 날짜나 시간으로는 예약을 잡을 수 없습니다. 현재 시각은 {today_str}(한국 시간)입니다. 오늘 이후의 날짜와 시간을 알려주세요.'
+                    'start_time': f'지난 날짜나 시간({start_korea.strftime("%m월 %d일 %H시 %M분")})으로는 예약을 잡을 수 없습니다. 현재 시각은 {today_str}(한국 시간)입니다. 오늘 이후의 날짜와 시간을 알려주세요.'
                 })
         return attrs
 

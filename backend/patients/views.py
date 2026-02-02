@@ -249,10 +249,15 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         patient_id = self.request.query_params.get('patient_id')
         if patient_id:
             queryset = queryset.filter(patient_identifier=patient_id)
+            logger.info(f"예약 조회 - patient_id 필터: {patient_id}, 결과: {queryset.count()}건")
         
         doctor_code = self.request.query_params.get('doctor_code')
         if doctor_code:
             queryset = queryset.filter(doctor_code=doctor_code)
+            logger.info(f"예약 조회 - doctor_code 필터: {doctor_code}, 결과: {queryset.count()}건")
+        
+        # 최종 쿼리셋 로깅
+        logger.info(f"예약 조회 최종 - 총 {queryset.count()}건 반환 (user: {self.request.user}, params: {dict(self.request.query_params)})")
         
         return queryset
 
@@ -266,7 +271,7 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def my_appointments(self, request):
-        """환자 ID로 예약 목록 조회"""
+        """환자 ID로 예약 목록 조회 (모바일 앱 전용 엔드포인트)"""
         patient_id = request.query_params.get('patient_id')
         if not patient_id:
             return Response(
@@ -274,7 +279,14 @@ class AppointmentViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
+        logger.info(f"my_appointments 호출 - patient_id: {patient_id}, user: {request.user}")
         queryset = self.get_queryset().filter(patient_identifier=patient_id).order_by('start_time')
+        logger.info(f"my_appointments 결과 - {queryset.count()}건 (쿼리: {queryset.query})")
+        
+        # 각 예약의 created_by 정보 로깅
+        for apt in queryset[:5]:  # 최대 5개만
+            logger.info(f"  - 예약 {apt.id}: {apt.start_time}, created_by={apt.created_by}")
+        
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
     

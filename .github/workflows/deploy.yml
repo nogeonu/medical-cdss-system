@@ -100,6 +100,10 @@ jobs:
             echo '[Install]' | sudo tee -a /etc/systemd/system/daphne.service
             echo 'WantedBy=multi-user.target' | sudo tee -a /etc/systemd/system/daphne.service
             sudo systemctl daemon-reload
+            # Clear Python bytecode and cache
+            find . -name "*.pyc" -delete
+            find . -name "__pycache__" -delete
+            
             # gunicorn이 실행 중이면 중지 (포트 충돌 방지)
             sudo systemctl stop gunicorn || true
             sudo systemctl disable gunicorn || true
