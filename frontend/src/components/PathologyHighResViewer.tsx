@@ -3,9 +3,29 @@
  * 워커 PC의 타일 서버(DZI) URL → Django 프록시 경유 시 ngrok 헤더 포함
  */
 import { useEffect, useRef, useState, useMemo } from 'react';
-import OSD from 'openseadragon';
-// 번들러에 따라 default로 올 수 있음
-const OpenSeadragon = typeof OSD === 'function' ? OSD : ((OSD as { default?: typeof OSD })?.default ?? OSD);
+
+// OpenSeadragon이 console.assert를 사용하는데, 일부 환경에서 없을 수 있음 → 폴리필
+// ⚠️ ES import는 호이스팅되므로 정적 import보다 먼저 실행되지 않음.
+//    따라서 OpenSeadragon은 동적 import로 로드하여 폴리필 적용 후에 초기화.
+if (typeof window !== 'undefined') {
+  if (typeof console === 'undefined') {
+    (window as unknown as Record<string, unknown>).console = {} as Console;
+  }
+  if (typeof console.assert !== 'function') {
+    console.assert = function (condition?: boolean, ...args: unknown[]) {
+      if (!condition) console.error(...args);
+    };
+  }
+}
+
+// OpenSeadragon 동적 로드 (폴리필 이후 실행 보장)
+let _osdPromise: Promise<typeof import('openseadragon')> | null = null;
+function loadOpenSeadragon() {
+  if (!_osdPromise) {
+    _osdPromise = import('openseadragon');
+  }
+  return _osdPromise;
+}
 import {
   Dialog,
   DialogContent,
@@ -62,6 +82,7 @@ export default function PathologyHighResViewer({
     console.log('[고해상도 뷰어] raw dziUrl:', dziUrl);
     console.log('[고해상도 뷰어] effectiveDziUrl (프록시):', effectiveDziUrl);
 
+    let cancelled = false;
     let loadTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
     // 로딩 타임아웃: open/open-failed가 안 오면 8초 후 로딩 해제 + 안내 (컨테이너가 늦게 붙어도 타임아웃은 항상 동작)
@@ -78,51 +99,58 @@ export default function PathologyHighResViewer({
     // 다이얼로그 레이아웃 완료 후 뷰어 초기화 (컨테이너 크기 확보)
     const timer = setTimeout(() => {
       if (!containerRef.current) return; // 컨테이너 없으면 뷰어만 스킵, 위 8초 타임아웃으로 안내
-      if (typeof OpenSeadragon !== 'function') {
-        setLoading(false);
-        setLoadError('뷰어를 시작할 수 없습니다. (OpenSeadragon 로드 실패)');
-        return;
-      }
-      try {
-        const viewer = OpenSeadragon({
-          element: containerRef.current,
-          tileSources: effectiveDziUrl,
-          prefixUrl: 'https://openseadragon.github.io/openseadragon/images/',
-          showNavigator: true,
-          navigatorPosition: 'BOTTOM_RIGHT',
-          animationTime: 0.3,
-          loadTilesWithAjax: true,
-          ajaxHeaders: {
-            'ngrok-skip-browser-warning': 'true',
-          },
-        });
-        viewerRef.current = viewer;
 
-        const osd = viewer as unknown as { addHandler: (name: string, fn: () => void) => void };
-        osd.addHandler('open-failed', () => {
-          console.error('[고해상도 뷰어] open-failed — DZI/타일 로드 실패. Network 탭에서 실패한 dzi-proxy 요청 확인.');
+      loadOpenSeadragon()
+        .then((mod) => {
+          if (cancelled) return;
+          const OSD = typeof mod === 'function' ? mod : ((mod as { default?: unknown })?.default ?? mod);
+          if (typeof OSD !== 'function') {
+            setLoading(false);
+            setLoadError('뷰어를 시작할 수 없습니다. (OpenSeadragon 로드 실패)');
+            return;
+          }
+          const viewer = (OSD as CallableFunction)({
+            element: containerRef.current,
+            tileSources: effectiveDziUrl,
+            prefixUrl: 'https://openseadragon.github.io/openseadragon/images/',
+            showNavigator: true,
+            navigatorPosition: 'BOTTOM_RIGHT',
+            animationTime: 0.3,
+            loadTilesWithAjax: true,
+            ajaxHeaders: {
+              'ngrok-skip-browser-warning': 'true',
+            },
+          });
+          viewerRef.current = viewer;
+
+          const osd = viewer as unknown as { addHandler: (name: string, fn: () => void) => void };
+          osd.addHandler('open-failed', () => {
+            console.error('[고해상도 뷰어] open-failed — DZI/타일 로드 실패. Network 탭에서 실패한 dzi-proxy 요청 확인.');
+            if (loadTimeoutId) clearTimeout(loadTimeoutId);
+            loadTimeoutId = null;
+            setLoading(false);
+            setLoadError('이미지를 불러올 수 없습니다. 워커 PC가 켜져 있는지, DZI 주소가 맞는지 확인해 주세요.');
+          });
+          osd.addHandler('open', () => {
+            console.log('[고해상도 뷰어] open — DZI 로드 성공');
+            if (loadTimeoutId) clearTimeout(loadTimeoutId);
+            loadTimeoutId = null;
+            setLoading(false);
+            setLoadError(null);
+          });
+        })
+        .catch((err) => {
+          if (cancelled) return;
           if (loadTimeoutId) clearTimeout(loadTimeoutId);
-          loadTimeoutId = null;
+          const msg = err instanceof Error ? err.message : String(err);
+          console.error('[고해상도 뷰어] OpenSeadragon 초기화 실패:', err);
           setLoading(false);
-          setLoadError('이미지를 불러올 수 없습니다. 워커 PC가 켜져 있는지, DZI 주소가 맞는지 확인해 주세요.');
+          setLoadError(`뷰어를 시작할 수 없습니다. (${msg})`);
         });
-        osd.addHandler('open', () => {
-          console.log('[고해상도 뷰어] open — DZI 로드 성공');
-          if (loadTimeoutId) clearTimeout(loadTimeoutId);
-          loadTimeoutId = null;
-          setLoading(false);
-          setLoadError(null);
-        });
-      } catch (err) {
-        if (loadTimeoutId) clearTimeout(loadTimeoutId);
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[고해상도 뷰어] OpenSeadragon 초기화 실패:', err);
-        setLoading(false);
-        setLoadError(`뷰어를 시작할 수 없습니다. (${msg})`);
-      }
     }, 200);
 
     return () => {
+      cancelled = true;
       clearTimeout(timer);
       if (loadTimeoutId) clearTimeout(loadTimeoutId);
       if (viewerRef.current) {

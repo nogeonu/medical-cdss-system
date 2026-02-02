@@ -12,7 +12,7 @@ echo "서버: ${GCP_USER}@${GCP_HOST}"
 echo "경로: ${APP_DIR}"
 echo ""
 
-# SSH로 접속하여 코드 업데이트 및 서비스 재시작
+# SSH로 접속하여 코드 업데이트, 프론트 빌드, 서비스 재시작
 ssh ${GCP_USER}@${GCP_HOST} << 'ENDSSH'
     set -e  # 에러 발생 시 중단
     
@@ -25,6 +25,12 @@ ssh ${GCP_USER}@${GCP_HOST} << 'ENDSSH'
     
     echo "✅ 코드 업데이트 완료"
     echo ""
+    
+    echo "🖼️ 프론트엔드 빌드 (고해상도 뷰어 등 반영)..."
+    cd /srv/django-react/app/frontend
+    npm ci --prefer-offline --no-audit || npm install
+    npm run build
+    cd /srv/django-react/app
     
     echo "🔄 Gunicorn 재시작 중..."
     sudo systemctl restart gunicorn
