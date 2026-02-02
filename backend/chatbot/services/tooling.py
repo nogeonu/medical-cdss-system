@@ -26,9 +26,10 @@ def _parse_preferred_datetime(message: str) -> datetime | None:
     hour = int(time_match.group(1))
     minute = int(time_match.group(2)) if time_match.group(2) else 0
 
-    # 연도는 현재 연도 가정 (과거/미래 판정은 호출부에서 처리 or 여기서 처리)
-    # CDSS 시스템 특성상 보통 가까운 미래 예약을 가정함.
-    year = timezone.now().year
+    # KST 기준으로 연도 설정
+    from zoneinfo import ZoneInfo
+    now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
+    year = now_korea.year
     
     try:
         # construct datetime (naive) -> will be localized by caller or interpreted as KST
