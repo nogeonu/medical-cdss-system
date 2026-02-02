@@ -117,10 +117,14 @@ export default function PathologyHighResViewer({
             showNavigator: true,
             navigatorPosition: 'BOTTOM_RIGHT',
             animationTime: 0.3,
+            maxZoomPixelRatio: 4,
+            smoothTileEdgesMinZoom: Infinity,
+            immediateRender: true,
             loadTilesWithAjax: true,
             ajaxHeaders: {
               'ngrok-skip-browser-warning': 'true',
             },
+            debugMode: false,
           });
           viewerRef.current = viewer;
 
@@ -133,11 +137,24 @@ export default function PathologyHighResViewer({
             setLoadError('이미지를 불러올 수 없습니다. 워커 PC가 켜져 있는지, DZI 주소가 맞는지 확인해 주세요.');
           });
           osd.addHandler('open', () => {
-            console.log('[고해상도 뷰어] open — DZI 로드 성공');
             if (loadTimeoutId) clearTimeout(loadTimeoutId);
             loadTimeoutId = null;
             setLoading(false);
             setLoadError(null);
+            // 디버그: DZI 메타데이터 정보 출력
+            try {
+              const v = viewer as unknown as Record<string, unknown>;
+              const world = v.world as { getItemAt: (i: number) => unknown } | undefined;
+              const tiledImage = world?.getItemAt(0) as Record<string, unknown> | undefined;
+              const source = tiledImage?.source as Record<string, unknown> | undefined;
+              const dims = source?.dimensions as { x: number; y: number } | undefined;
+              const levels = (source as { levels?: unknown[] } | undefined)?.levels;
+              const maxLevel = (source as { maxLevel?: number } | undefined)?.maxLevel;
+              console.log('[고해상도 뷰어] open — DZI 로드 성공');
+              console.log('[고해상도 뷰어] 원본 크기:', dims?.x, 'x', dims?.y);
+              console.log('[고해상도 뷰어] 레벨 수:', levels?.length ?? maxLevel ?? 'unknown');
+              console.log('[고해상도 뷰어] tileSize:', (source as { tileSize?: number } | undefined)?.tileSize);
+            } catch { /* ignore */ }
           });
         })
         .catch((err) => {
