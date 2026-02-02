@@ -52,10 +52,16 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
     year = timezone.now().year
     try:
         start_time = datetime(year, month, day, hour, minute, 0)  # naive = 한국 시간으로 해석
+        logger.info(f"챗봇 예약: 파싱된 시간 start_time={start_time} (naive, 한국 시간 의도)")
     except ValueError:
         return False, "날짜 또는 시간 형식이 올바르지 않습니다."
 
     end_time = start_time + timedelta(minutes=30)
+    
+    # 현재 한국 시간과 비교 (검증 전 미리보기)
+    from zoneinfo import ZoneInfo
+    now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
+    logger.info(f"챗봇 예약: 현재 한국 시각={now_korea}, start_time={start_time} → 차이={(start_time - now_korea.replace(tzinfo=None)).total_seconds() / 60:.1f}분")
 
     # auth_user에서 doctor_id로 의사 user id 조회
     try:
