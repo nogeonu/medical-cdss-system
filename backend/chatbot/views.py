@@ -62,16 +62,31 @@ def chat(request):
         # 기본 응답 (임시)
         response_message = "안녕하세요! 건양대학교병원 챗봇입니다. 무엇을 도와드릴까요?"
 
-        if '병원 위치' in message or '위치' in message:
-            response_message = "건양대학교병원은 대전광역시 서구 관저동에 위치해 있습니다."
-        elif ('예약' in message or '진료' in message) and '내역' not in message and '확인' not in message and '조회' not in message:
+        # 위치/주소 (FAQ와 동일한 답변)
+        if any(kw in message for kw in ('병원 위치', '위치', '주소', '어디에', '어디서', '주소가')):
+            response_message = "건양대학교병원은 대전광역시 서구 관저동에 위치해 있습니다. (관저동언로 158)"
+        # 전화/연락처
+        elif any(kw in message for kw in ('전화', '연락처', '번호', '전화번호')):
+            response_message = "건양대학교병원 대표전화는 042-600-9000입니다. 진료예약 042-600-9001, 건강검진예약 042-600-9002입니다."
+        # 주차 (FAQ와 동일)
+        elif any(kw in message for kw in ('주차', '주차요금', '주차비', '주차료')):
+            response_message = "외래 진료 시 4시간 무료이며, 이후 10분당 추가 요금이 발생합니다."
+        # 제증명 (FAQ와 동일)
+        elif any(kw in message for kw in ('제증명', '증명서', '진단서', '발급')):
+            response_message = "본인 신분증을 지참하여 원무과 창구를 방문하시거나, 무인발급기/홈페이지에서 발급 가능합니다."
+        # 응급실 (FAQ와 동일)
+        elif any(kw in message for kw in ('응급실', '응급', '응급의료')):
+            response_message = "응급의료센터는 365일 24시간 연중무휴로 운영됩니다."
+        # 운영시간/진료시간
+        elif any(kw in message for kw in ('운영시간', '영업시간', '진료시간', '언제 문', '몇 시')):
+            response_message = "진료 시간은 평일 09:00~18:00입니다. 응급의료센터는 24시간 운영합니다. 자세한 진료과별 시간은 대표전화(042-600-9000)로 문의해 주세요."
+        # 예약/진료 (내역·확인·조회 제외)
+        elif ('예약' in message or '진료' in message) and not any(kw in message for kw in ('내역', '확인', '조회', '목록', '있어', '없어', '알려')):
             from datetime import datetime
             from zoneinfo import ZoneInfo
             now_korea = datetime.now(ZoneInfo("Asia/Seoul"))
             today_str = now_korea.strftime('%Y년 %m월 %d일 %H:%M')
-            response_message = f"진료 예약은 병원 홈페이지 또는 전화로 가능합니다. 예약은 오늘 이후 날짜와 시간만 선택할 수 있습니다. (현재 시각: {today_str} 한국 시간) 예약 내역이 필요하시면 '예약 내역'이라고 말씀해 주세요."
-        elif '전화' in message or '연락처' in message:
-            response_message = "건양대학교병원 전화번호는 042-600-9000입니다."
+            response_message = f"진료 예약은 병원 홈페이지 또는 전화(042-600-9001)로 가능합니다. 예약은 오늘 이후 날짜와 시간만 선택할 수 있습니다. (현재 시각: {today_str} 한국 시간) 예약 내역이 필요하시면 '예약 내역'이라고 말씀해 주세요."
 
         return Response({
             'reply': response_message,
