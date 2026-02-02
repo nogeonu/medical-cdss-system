@@ -31,30 +31,14 @@ def _try_create_appointment_from_message(message: str, patient_identifier: str, 
 
     doctor_code = doctor_code_match.group(0).strip('()')  # D2026004
 
-    # 날짜: "2. 5." / "2. 5. (목)" / "2.5(목)" / "2.5" (점 날짜) / "2월 5일"
-    date_match = (
-        re.search(r'(\d{1,2})\.\s*(\d{1,2})\.', message)
-        or re.search(r'(\d{1,2})\.(\d{1,2})(?:\s*\([월화수목금토일]\))?', message)  # 2.5(목) 또는 2.5
-        or re.search(r'(\d{1,2})월\s*(\d{1,2})일', message)
-    )
-    if not date_match:
-        return False, ""
-
-    month, day = int(date_match.group(1)), int(date_match.group(2))
-    # 시간: 13시30분 또는 13시
-    time_match = re.search(r'(\d{1,2})시\s*(\d{1,2})?분?', message)
-    if not time_match:
-        return False, ""
-
-    hour = int(time_match.group(1))
-    minute = int(time_match.group(2)) if time_match.group(2) else 0
-
-    year = timezone.now().year
-    try:
-        start_time = datetime(year, month, day, hour, minute, 0)  # naive = 한국 시간으로 해석
-        logger.info(f"챗봇 예약: 파싱된 시간 start_time={start_time} (naive, 한국 시간 의도)")
-    except ValueError:
+    # 날짜/시간 파싱 (점 날짜 패턴 포함)
+    from chatbot.services.tooling import _resolve_requested_datetime
+    start_time = _resolve_requested_datetime(message)
+    if not start_time:
+        # 날짜/시간 인식 실패 시: 예: "2.5"만 있고 시간이 없거나, 날짜 형식이 이상할 때
         return False, "날짜 또는 시간 형식이 올바르지 않습니다."
+    
+    logger.info(f"챗봇 예약: 파싱된 시간 start_time={start_time} (naive, 한국 시간 의도)")
 
     end_time = start_time + timedelta(minutes=30)
     
