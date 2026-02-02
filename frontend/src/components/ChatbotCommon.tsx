@@ -1,6 +1,10 @@
 import { useState } from "react";
 
-export const CHAT_API_URL = "/api/chatbot/";
+/** 8001 포트 챗봇 서버(Flutter 챗봇 서버) 기준 URL. Django 백엔드 /api/chat/ 가 아님. */
+const CHATBOT_SERVER_BASE =
+    (import.meta.env.VITE_CHATBOT_SERVER_URL as string | undefined) ||
+    "http://34.42.223.43:8001";
+export const CHAT_API_URL = `${CHATBOT_SERVER_BASE}/api/chat/`;
 
 export type ChatButton = { text?: string; action?: string };
 
