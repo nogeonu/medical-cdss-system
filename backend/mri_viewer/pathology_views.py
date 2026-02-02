@@ -227,6 +227,7 @@ def get_analysis_result(request, request_id):
                 'elapsed_time_seconds': result.get('elapsed_time_seconds'),
                 'image_url': result.get('image_url'),
                 'viewer_url': result.get('viewer_url'),
+                'dzi_url': result.get('dzi_url'),  # OpenSeadragon용 DZI 메타데이터 URL (없으면 viewer_url 사용)
             }
         elif data.get('status') == 'failed':
             result = data.get('result', {})
@@ -357,6 +358,7 @@ def complete_task(request):
     - num_patches: 분석한 패치 개수 (선택)
     - top_attention_patches: 상위 attention 패치 인덱스 배열 (선택)
     - viewer_url: 뷰어 URL (선택)
+    - dzi_url: OpenSeadragon용 DZI 메타데이터 URL (선택, 없으면 viewer_url 사용)
     
     이미지 파일 (Tumor 판정 시만):
     - {task_id}_overlay.png (우선) 또는 {task_id}_mask.png
@@ -375,6 +377,7 @@ def complete_task(request):
             num_patches = request.data.get('num_patches', 0)
             top_attention_patches = request.data.get('top_attention_patches', [])
             viewer_url = request.data.get('viewer_url', '')
+            dzi_url = request.data.get('dzi_url', '')
             
             # 이미지 파일 처리 (Tumor 판정 시만)
             image_file = None
@@ -415,6 +418,7 @@ def complete_task(request):
             num_patches = request.data.get('num_patches', 0)
             top_attention_patches = request.data.get('top_attention_patches', [])
             viewer_url = request.data.get('viewer_url', '')
+            dzi_url = request.data.get('dzi_url', '')
             image_file = None
             image_filename = None
         
@@ -476,6 +480,7 @@ def complete_task(request):
             'num_patches': num_patches,
             'top_attention_patches': top_attention_patches,
             'viewer_url': viewer_url if viewer_url else None,
+            'dzi_url': dzi_url if dzi_url else None,  # OpenSeadragon용 (없으면 viewer_url 사용)
             'image_url': image_url  # 이미지 URL 추가
         }
         d['completed_at'] = timezone.now().isoformat()
@@ -718,77 +723,92 @@ def save_pathology_result(request):
                 'error': '필수 필드가 누락되었습니다: class_id, class_name, confidence가 필요합니다'
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # 이미지 URL이 있으면 Orthanc에 업로드
+        # 이미지 URL이 있으면: 외부 URL이면 다운로드 후 우리 서버 media에 저장 → 연구실 PC 꺼져 있어도 OCS에서 계속 표시
         image_url = request.data.get('image_url', '')
         orthanc_instance_id = None
+        is_external_url = image_url.startswith('http://') or image_url.startswith('https://')
         
         if image_url:
             try:
                 from PIL import Image
                 import requests as req_lib
+                from urllib.parse import urlparse
                 from .utils import pil_image_to_dicom
                 from .orthanc_client import OrthancClient
                 from django.core.files.base import ContentFile
                 
-                # 이미지 다운로드
                 logger.info(f"📥 병리 이미지 다운로드 시작: {image_url}")
                 
-                # 절대 URL로 변환
+                # 절대 URL로 변환 (상대 경로면 우리 서버 기준)
                 if image_url.startswith('/'):
                     full_image_url = f"{request.scheme}://{request.get_host()}{image_url}"
                 else:
                     full_image_url = image_url
                 
-                # 이미지 다운로드
                 img_response = req_lib.get(full_image_url, timeout=30)
                 img_response.raise_for_status()
                 
-                # PIL Image로 로드
-                img_data = ContentFile(img_response.content)
+                img_bytes = img_response.content
+                img_data = ContentFile(img_bytes)
                 pil_image = Image.open(img_data)
                 
-                # 환자 정보 가져오기
+                # 외부 URL이면 우리 서버 media에 저장 → DB에는 우리 서버 경로만 저장 (연구실 PC 꺼져 있어도 표시)
+                if is_external_url:
+                    save_dir = os.path.join(settings.MEDIA_ROOT, 'pathology_results', str(order_id))
+                    os.makedirs(save_dir, exist_ok=True)
+                    # URL에서 파일명 추출 (예: ..._mask.png), 없으면 기본값
+                    parsed = urlparse(full_image_url)
+                    base_name = os.path.basename(parsed.path) or f"pathology_{order_id}_mask.png"
+                    # 확장자 보정
+                    if not base_name.lower().endswith(('.png', '.jpg', '.jpeg', '.tif', '.tiff')):
+                        base_name = base_name.rsplit('.', 1)[0] + '.png'
+                    save_path = os.path.join(save_dir, base_name)
+                    with open(save_path, 'wb') as f:
+                        f.write(img_bytes)
+                    our_relative = os.path.join('pathology_results', str(order_id), base_name).replace('\\', '/')
+                    image_url = f"{settings.MEDIA_URL.rstrip('/')}/{our_relative}".replace('//', '/')
+                    logger.info(f"✅ 병리 이미지 우리 서버 저장: {save_path} → image_url={image_url}")
+                
+                # Orthanc 업로드 (MRI 뷰 연동)
                 patient_id = order.patient.patient_id if order.patient else None
                 patient_name = order.patient.name if order.patient else 'Unknown'
                 
                 if not patient_id:
                     logger.warning("⚠️ 환자 ID가 없어 Orthanc 업로드를 건너뜁니다.")
                 else:
-                    # DICOM으로 변환 (SM 모달리티)
                     logger.info(f"🔄 병리 이미지를 DICOM으로 변환 중... (환자 ID: {patient_id})")
                     orthanc_client = OrthancClient()
-                    
-                    # 기존 Study 찾기
                     study_instance_uid = None
                     try:
                         study_instance_uid = orthanc_client.get_existing_study_instance_uid(patient_id)
                     except Exception as e:
                         logger.debug(f"기존 Study 찾기 실패 (새로 생성): {e}")
                     
-                    # DICOM 변환 (SM 모달리티 사용)
                     dicom_bytes = pil_image_to_dicom(
                         pil_image=pil_image,
                         patient_id=patient_id,
                         patient_name=patient_name,
                         series_description=f"Pathology Analysis - {class_name}",
-                        modality="SM",  # Slide Microscopy
+                        modality="SM",
                         orthanc_client=orthanc_client,
                         study_instance_uid=study_instance_uid
                     )
-                    
-                    # Orthanc에 업로드
                     logger.info(f"📤 Orthanc에 병리 이미지 업로드 중...")
                     upload_result = orthanc_client.upload_dicom(dicom_bytes)
                     orthanc_instance_id = upload_result.get('ID') if isinstance(upload_result, dict) else upload_result
-                    
                     logger.info(f"✅ 병리 이미지 Orthanc 업로드 완료: instance_id={orthanc_instance_id}")
                     
             except Exception as e:
-                logger.error(f"❌ 병리 이미지 Orthanc 업로드 실패: {str(e)}", exc_info=True)
-                # 업로드 실패해도 분석 결과는 저장
-                logger.warning("⚠️ Orthanc 업로드 실패했지만 분석 결과는 저장합니다.")
+                logger.error(f"❌ 병리 이미지 처리 실패: {str(e)}", exc_info=True)
+                if is_external_url:
+                    image_url = request.data.get('image_url', '')  # 실패 시 원본 URL 유지
+                logger.warning("⚠️ 이미지 처리 실패했지만 분석 결과는 저장합니다.")
         
-        # 이미 분석 결과가 있으면 업데이트, 없으면 생성 (알림 없이, 상태 변경 없이)
+        # 고해상도 뷰어용 URL 받기 (워커 PC가 제공)
+        dzi_url = request.data.get('dzi_url', '')
+        viewer_url = request.data.get('viewer_url', '')
+        
+        # 이미 분석 결과가 있으면 업데이트, 없으면 생성 (image_url = 우리 서버 경로로 저장됨)
         pathology_analysis, created = PathologyAnalysisResult.objects.update_or_create(
             order=order,
             defaults={
@@ -799,6 +819,8 @@ def save_pathology_result(request):
                 'probabilities': request.data.get('probabilities', {}),
                 'filename': request.data.get('filename', ''),
                 'image_url': image_url,
+                'dzi_url': dzi_url,  # 고해상도 뷰어용 DZI URL
+                'viewer_url': viewer_url,  # 대체 뷰어 URL
                 'findings': request.data.get('findings', ''),
                 'recommendations': request.data.get('recommendations', ''),
             }
@@ -820,3 +842,227 @@ def save_pathology_result(request):
     except Exception as e:
         logger.error(f"❌ 병리 분석 결과 저장 실패: {str(e)}", exc_info=True)
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def update_pathology_dzi_url(request):
+    """
+    이미 분석된 주문에 dzi_url(또는 viewer_url)만 추가/수정합니다.
+    워커가 예전에 dzi_url을 안 보냈던 주문(가나다 등) 보정용.
+
+    Request Body: { "order_id": "uuid", "dzi_url": "https://xxx.ngrok-free.app/dzi/...", "viewer_url": "(선택)" }
+    """
+    if not PathologyAnalysisResult or not Order:
+        return Response({'error': 'OCS 모델을 불러올 수 없습니다'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    order_id = request.data.get('order_id')
+    if not order_id:
+        return Response({'error': 'order_id가 필요합니다'}, status=status.HTTP_400_BAD_REQUEST)
+
+    dzi_url = (request.data.get('dzi_url') or '').strip()
+    viewer_url = (request.data.get('viewer_url') or '').strip()
+    if not dzi_url and not viewer_url:
+        return Response({'error': 'dzi_url 또는 viewer_url 중 하나는 필요합니다'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        order = Order.objects.get(id=order_id)
+    except Order.DoesNotExist:
+        return Response({'error': '주문을 찾을 수 없습니다'}, status=status.HTTP_404_NOT_FOUND)
+
+    try:
+        pathology = order.pathology_analysis
+    except PathologyAnalysisResult.DoesNotExist:
+        return Response({'error': '이 주문에는 병리 분석 결과가 없습니다. 먼저 분석을 완료해 주세요.'}, status=status.HTTP_404_NOT_FOUND)
+
+    if dzi_url:
+        pathology.dzi_url = dzi_url
+    if viewer_url:
+        pathology.viewer_url = viewer_url
+    pathology.save(update_fields=['dzi_url', 'viewer_url', 'updated_at'])
+
+    logger.info(f"✅ 병리 DZI URL 보정: order_id={order_id}, dzi_url={dzi_url[:60]}...")
+    return Response({
+        'success': True,
+        'message': 'dzi_url/viewer_url이 업데이트되었습니다.',
+        'order_id': str(order_id),
+        'dzi_url': pathology.dzi_url or None,
+        'viewer_url': pathology.viewer_url or None,
+    }, status=status.HTTP_200_OK)
+
+
+# 연구실 PC 미디어 베이스 URL (환경변수). 예: http://연구실PC_IP:8000
+PATHOLOGY_WORKER_MEDIA_URL = os.getenv('PATHOLOGY_WORKER_MEDIA_URL', '').rstrip('/')
+
+
+@api_view(['POST'])
+@csrf_exempt
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([IsAuthenticated])
+def sync_pathology_image_from_worker(request):
+    """
+    이미 DB에 우리 서버 경로(/media/...)로 저장됐지만 파일이 없는 경우,
+    연구실 PC에서 이미지를 받아와 우리 서버에 저장합니다.
+    연구실 PC가 켜져 있을 때 한 번 호출하면 OCS에서 계속 표시됩니다.
+
+    Request Body: { "order_id": "uuid" }
+    또는 Query: ?order_id=uuid
+    """
+    try:
+        if not PathologyAnalysisResult or not Order:
+            return Response(
+                {'error': 'OCS 모델을 불러올 수 없습니다'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        order_id = request.data.get('order_id') or request.query_params.get('order_id')
+        if not order_id:
+            return Response({'error': 'order_id가 필요합니다'}, status=status.HTTP_400_BAD_REQUEST)
+        if not PATHOLOGY_WORKER_MEDIA_URL:
+            return Response({
+                'error': 'PATHOLOGY_WORKER_MEDIA_URL 환경변수가 설정되지 않았습니다. '
+                         '예: PATHOLOGY_WORKER_MEDIA_URL=http://연구실PC_IP:8000'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        order = Order.objects.get(id=order_id)
+        try:
+            pathology = order.pathology_analysis
+        except PathologyAnalysisResult.DoesNotExist:
+            return Response({'error': '이 주문에는 병리 분석 결과가 없습니다'}, status=status.HTTP_404_NOT_FOUND)
+        raw_url = (pathology.image_url or '').strip()
+        if not raw_url or not raw_url.startswith('/media/'):
+            return Response({
+                'message': '이 주문에는 우리 서버 경로 이미지가 없거나, 이미 외부 URL입니다.',
+                'image_url': raw_url
+            }, status=status.HTTP_200_OK)
+
+        # 우리 서버에 파일이 이미 있으면 스킵
+        media_url = (getattr(settings, 'MEDIA_URL', '/media/') or '/media/').rstrip('/')
+        relative = raw_url[len('/media/'):].lstrip('/').replace('\\', '/')
+        full_path = os.path.join(settings.MEDIA_ROOT, relative).replace('\\', os.sep)
+        if os.path.isfile(full_path):
+            return Response({
+                'success': True,
+                'message': '이미 우리 서버에 파일이 있습니다.',
+                'path': full_path
+            }, status=status.HTTP_200_OK)
+
+        # 연구실 PC에서 다운로드
+        full_image_url = f"{PATHOLOGY_WORKER_MEDIA_URL}{raw_url}"
+        import requests as req_lib
+        logger.info(f"📥 연구실 PC에서 병리 이미지 동기화: {full_image_url}")
+        img_response = req_lib.get(full_image_url, timeout=30)
+        img_response.raise_for_status()
+        img_bytes = img_response.content
+
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        with open(full_path, 'wb') as f:
+            f.write(img_bytes)
+        logger.info(f"✅ 병리 이미지 우리 서버 저장 완료: {full_path}")
+
+        return Response({
+            'success': True,
+            'message': '연구실 PC에서 이미지를 받아 우리 서버에 저장했습니다.',
+            'path': full_path,
+            'image_url': raw_url
+        }, status=status.HTTP_200_OK)
+
+    except Order.DoesNotExist:
+        return Response({'error': '주문을 찾을 수 없습니다'}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        logger.error(f"❌ 병리 이미지 동기화 실패: {str(e)}", exc_info=True)
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# DZI 프록시 허용 호스트 (보안: ngrok 등만 허용)
+PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS = os.getenv(
+    'PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS',
+    'ngrok-free.app,ngrok-free.dev,ngrok.io,ngrok.app'
+).strip().lower().split(',')
+
+
+def _pathology_dzi_proxy_fetch(target_url):
+    """DZI 프록시: target_url로 요청 후 응답 반환 (HttpResponse 또는 None)."""
+    from django.http import HttpResponse
+    headers = {
+        'User-Agent': 'Django-DZI-Proxy',
+        'ngrok-skip-browser-warning': 'true',
+    }
+    try:
+        resp = requests.get(target_url, headers=headers, timeout=30)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        logger.warning(f"DZI 프록시 업스트림 요청 실패: {target_url[:80]} - {e}")
+        return None
+    content_type = resp.headers.get('Content-Type', 'application/octet-stream').split(';')[0].strip()
+    response = HttpResponse(resp.content, content_type=content_type)
+    if 'Cache-Control' not in resp.headers:
+        response['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
+@api_view(['GET'])
+@authentication_classes([CSRFExemptSessionAuthentication])
+@permission_classes([AllowAny])
+def pathology_dzi_proxy(request, encoded_path=None):
+    """
+    DZI 메타데이터 및 타일 프록시.
+    검사실 브라우저 → Django → 워커(ngrok) 요청 시 ngrok-skip-browser-warning 헤더를 포함합니다.
+
+    - 경로 기반 (OpenSeadragon 타일 URL 호환): GET /api/mri/pathology/dzi-proxy/<encoded_full_url>
+      예: .../dzi-proxy/https%3A%2F%2Fxxx.ngrok.app%2Fdzi%2Ftumor.dzi
+      타일: .../dzi-proxy/https%3A%2F%2Fxxx.ngrok.app%2Fdzi%2Ftumor_files/0/0_0.jpeg
+    - 쿼리 기반: GET ?url=<encoded_full_url>
+    """
+    from django.http import HttpResponse
+    from urllib.parse import urlparse, unquote
+
+    if encoded_path and encoded_path.strip():
+        try:
+            target_url = unquote(encoded_path)
+        except Exception:
+            target_url = encoded_path
+        # OpenSeadragon은 base.dzi + "_files/level/col_row.jpeg" 로 타일 요청함.
+        # 워커는 base_files/... ( .dzi 없음 ) 형식이므로 변환.
+        if '.dzi_files' in target_url or '.dzi_files/' in target_url:
+            target_url = target_url.replace('.dzi_files', '_files', 1)
+        logger.info(f"DZI 프록시 요청 (경로): target_host={urlparse(target_url).hostname if target_url else None}")
+    else:
+        url_raw = request.GET.get('url', '').strip()
+        if not url_raw:
+            return Response({'error': 'url 쿼리 파라미터가 필요합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            target_url = unquote(url_raw)
+        except Exception:
+            target_url = url_raw
+
+    if not target_url.startswith('http://') and not target_url.startswith('https://'):
+        return Response({'error': 'url은 http 또는 https여야 합니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        parsed = urlparse(target_url)
+        host = (parsed.hostname or '').lower()
+        allowed = any(
+            host.endswith(a.strip()) or host == a.strip()
+            for a in PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS
+            if a.strip()
+        )
+        if not allowed:
+            logger.warning(f"DZI 프록시 허용되지 않은 호스트: host={host}, allowed={PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS}")
+            return Response(
+                {'error': f'허용되지 않은 호스트입니다. PATHOLOGY_DZI_PROXY_ALLOWED_HOSTS를 확인하세요.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+    except Exception as e:
+        logger.warning(f"DZI 프록시 URL 파싱 실패: {e}")
+        return Response({'error': 'url 형식이 올바르지 않습니다.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    response = _pathology_dzi_proxy_fetch(target_url)
+    if response is None:
+        logger.warning(f"DZI 프록시 업스트림 실패 (502): target={target_url[:100]}...")
+        return Response(
+            {'error': '워커 DZI 서버에 연결할 수 없습니다. 워커 PC와 ngrok을 확인하세요.'},
+            status=status.HTTP_502_BAD_GATEWAY
+        )
+    logger.info(f"DZI 프록시 성공: target_host={parsed.hostname}")
+    return response
