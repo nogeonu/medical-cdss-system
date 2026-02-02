@@ -1,8 +1,23 @@
 import logging
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from rest_framework import serializers
 from .models import Patient, MedicalRecord, PatientUser, Appointment
 
 logger = logging.getLogger(__name__)
+
+# 예약 "지난 시간" 검증 시 Asia/Seoul 기준 사용 (서버가 UTC여도 한국 시간 미래가 과거로 잘못 거절되지 않도록)
+def _now_korea_naive():
+    return datetime.now(ZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+
+
+def _as_korea_naive(dt):
+    """datetime을 한국 시간 기준 naive로 변환 (비교용)"""
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        return dt.astimezone(ZoneInfo("Asia/Seoul")).replace(tzinfo=None)
+    return dt
 
 
 class PatientUserSignupSerializer(serializers.Serializer):
@@ -153,6 +168,14 @@ class AppointmentSerializer(serializers.ModelSerializer):
         end = attrs.get('end_time')
         if start and end and end <= start:
             raise serializers.ValidationError({'end_time': '종료 일시는 시작 일시보다 이후여야 합니다.'})
+        # 지난 날짜/시간 거절: Asia/Seoul 기준으로 비교 (서버 타임존과 무관)
+        if start is not None:
+            now_korea = _now_korea_naive()
+            start_korea = _as_korea_naive(start)
+            if start_korea < now_korea:
+                raise serializers.ValidationError({
+                    'start_time': '지난 날짜나 시간으로는 예약을 잡을 수 없습니다. 오늘 이후의 날짜와 시간을 알려주세요.'
+                })
         return attrs
 
     def create(self, validated_data):
