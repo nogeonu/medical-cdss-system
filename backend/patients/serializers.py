@@ -119,6 +119,7 @@ class PatientProfileSerializer(serializers.ModelSerializer):
 class AppointmentSerializer(serializers.ModelSerializer):
     doctor_display = serializers.SerializerMethodField()
     patient_display = serializers.SerializerMethodField()
+    # API는 patient_id로 받고 모델 patient_identifier에 저장 (웹/모바일 통일)
     patient_id = serializers.CharField(
         source='patient_identifier',
         allow_blank=True,

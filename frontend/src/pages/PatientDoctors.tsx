@@ -246,7 +246,7 @@ export default function PatientDoctors() {
         start_time: startDateTime,
         end_time: endDateTime,
         doctor: selectedDoctor.id,
-        patient_identifier: patientUser.patient_id,
+        patient_id: patientUser.patient_id,
         patient_name: patientUser.name,
         memo: appointmentMemo.trim() || "",
       };
