@@ -503,7 +503,8 @@ class PathologyAnalysisResultSerializer(serializers.ModelSerializer):
             'id', 'order', 'analyzed_by', 'analyzed_by_name',
             'order_patient_name', 'order_patient_id',
             'class_id', 'class_name', 'confidence', 'probabilities',
-            'filename', 'image_url', 'findings', 'recommendations',
+            'filename', 'image_url', 'dzi_url', 'viewer_url',
+            'findings', 'recommendations',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -516,5 +517,6 @@ class PathologyAnalysisResultCreateSerializer(serializers.ModelSerializer):
         model = PathologyAnalysisResult
         fields = [
             'order', 'class_id', 'class_name', 'confidence', 'probabilities',
-            'filename', 'image_url', 'findings', 'recommendations'
+            'filename', 'image_url', 'dzi_url', 'viewer_url',
+            'findings', 'recommendations'
         ]
