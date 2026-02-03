@@ -924,12 +924,33 @@ export default function MRIViewer() {
       // 기존 로직 (병리 영상, 유방촬영술 영상)
       for (let i = 0; i < files.length; i++) {
         try {
-          console.log(`📤 [파일 ${i + 1}/${files.length}] 업로드 시작:`, {
+          // 파일 기본 정보 및 검증
+          const fileInfo = {
             name: files[i].name,
-            size: `${(files[i].size / 1024 / 1024).toFixed(2)} MB`,
+            size: files[i].size,
+            sizeMB: `${(files[i].size / 1024 / 1024).toFixed(2)} MB`,
             type: files[i].type,
-            imageType: imageType
-          });
+            imageType: imageType,
+            hasInvalidChars: /[\x00-\x1F\x7F]/.test(files[i].name) // 제어문자 체크
+          };
+
+          console.log(`📤 [파일 ${i + 1}/${files.length}] 업로드 시작:`, fileInfo);
+
+          // 파일 크기 체크 (500MB 초과 거부)
+          if (files[i].size > 500 * 1024 * 1024) {
+            const msg = `파일이 너무 큽니다 (최대 500MB, 현재 ${fileInfo.sizeMB})`;
+            errorMessages.push(`${files[i].name}: ${msg}`);
+            console.error(`❌ [파일 ${i + 1}] ${msg}`);
+            continue;
+          }
+
+          // 파일이 비어있는지 체크
+          if (files[i].size === 0) {
+            const msg = '빈 파일입니다 (0 bytes)';
+            errorMessages.push(`${files[i].name}: ${msg}`);
+            console.error(`❌ [파일 ${i + 1}] ${msg}`);
+            continue;
+          }
 
           // 파일이 실제로 읽을 수 있는지 확인 (특히 유방촬영술 DICOM)
           if (imageType === '유방촬영술 영상') {
@@ -971,12 +992,34 @@ export default function MRIViewer() {
 
           console.log(`🌐 [파일 ${i + 1}] fetch 호출: ${uploadUrl}`);
 
-          const response = await fetch(uploadUrl, {
-            method: 'POST',
-            body: formData
-          });
+          // 큰 파일(50MB 이상)은 타임아웃 연장 및 에러 핸들링 강화
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => {
+            console.error(`⏱️ [파일 ${i + 1}] 타임아웃 발생 (5분 초과)`);
+            controller.abort();
+          }, 300000); // 5분 타임아웃
 
-          console.log(`✅ [파일 ${i + 1}] 응답 수신: status=${response.status}`);
+          let response;
+          try {
+            response = await fetch(uploadUrl, {
+              method: 'POST',
+              body: formData,
+              signal: controller.signal,
+              // credentials 명시적 설정
+              credentials: 'include',
+            });
+
+            console.log(`✅ [파일 ${i + 1}] 응답 수신: status=${response.status}`);
+          } catch (fetchError) {
+            clearTimeout(timeoutId);
+            // AbortError인 경우 타임아웃, 그 외는 네트워크 오류
+            if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+              throw new Error(`업로드 타임아웃 (5분 초과)`);
+            }
+            throw fetchError;
+          } finally {
+            clearTimeout(timeoutId);
+          }
 
           // Response body는 한 번만 읽을 수 있으므로 text를 먼저 읽고 JSON 파싱 시도
           const responseText = await response.text();
