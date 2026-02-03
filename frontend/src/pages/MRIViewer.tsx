@@ -924,6 +924,40 @@ export default function MRIViewer() {
       // 기존 로직 (병리 영상, 유방촬영술 영상)
       for (let i = 0; i < files.length; i++) {
         try {
+          console.log(`📤 [파일 ${i + 1}/${files.length}] 업로드 시작:`, {
+            name: files[i].name,
+            size: `${(files[i].size / 1024 / 1024).toFixed(2)} MB`,
+            type: files[i].type,
+            imageType: imageType
+          });
+
+          // 파일이 실제로 읽을 수 있는지 확인 (특히 유방촬영술 DICOM)
+          if (imageType === '유방촬영술 영상') {
+            try {
+              const slice = files[i].slice(0, 132); // DICOM 헤더 일부만 읽기
+              const buffer = await slice.arrayBuffer();
+              const view = new DataView(buffer);
+              // DICOM 파일은 128바이트 프리앰블 + "DICM" 매직 넘버
+              const isDicom = buffer.byteLength >= 132 && 
+                             view.getUint8(128) === 0x44 && // 'D'
+                             view.getUint8(129) === 0x49 && // 'I'
+                             view.getUint8(130) === 0x43 && // 'C'
+                             view.getUint8(131) === 0x4D;   // 'M'
+              
+              console.log(`📋 [파일 ${i + 1}] DICOM 검증:`, isDicom ? '✅ 유효한 DICOM' : '❌ DICOM 아님');
+              
+              if (!isDicom) {
+                errorMessages.push(`${files[i].name}: DICOM 파일이 아닙니다.`);
+                console.error(`❌ [파일 ${i + 1}] DICOM이 아닌 파일:`, files[i].name);
+                continue;
+              }
+            } catch (readError) {
+              console.error(`❌ [파일 ${i + 1}] 파일 읽기 실패:`, readError);
+              errorMessages.push(`${files[i].name}: 파일을 읽을 수 없습니다.`);
+              continue;
+            }
+          }
+
           const formData = new FormData();
           formData.append('file', files[i]);
           formData.append('patient_id', selectedPatient);
@@ -935,10 +969,14 @@ export default function MRIViewer() {
             ? `${API_BASE_URL}/pathology/upload/`
             : `${API_BASE_URL}/orthanc/upload/`;
 
+          console.log(`🌐 [파일 ${i + 1}] fetch 호출: ${uploadUrl}`);
+
           const response = await fetch(uploadUrl, {
             method: 'POST',
             body: formData
           });
+
+          console.log(`✅ [파일 ${i + 1}] 응답 수신: status=${response.status}`);
 
           // Response body는 한 번만 읽을 수 있으므로 text를 먼저 읽고 JSON 파싱 시도
           const responseText = await response.text();
@@ -970,7 +1008,15 @@ export default function MRIViewer() {
         } catch (fileError) {
           const errorMsg = fileError instanceof Error ? fileError.message : `파일 ${i + 1} 업로드 중 오류`;
           errorMessages.push(`${files[i].name}: ${errorMsg}`);
-          console.error(`❌ 파일 ${i + 1} 업로드 예외:`, fileError);
+          console.error(`❌ [파일 ${i + 1}] 업로드 예외:`, {
+            error: fileError,
+            errorName: fileError instanceof Error ? fileError.name : 'Unknown',
+            errorMessage: fileError instanceof Error ? fileError.message : String(fileError),
+            errorStack: fileError instanceof Error ? fileError.stack : undefined,
+            fileName: files[i].name,
+            fileSize: files[i].size,
+            fileType: files[i].type
+          });
         }
       }
 
