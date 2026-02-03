@@ -70,8 +70,9 @@ export default function Patients() {
     queryFn: async () => {
       try {
         const response = await apiRequest("GET", "/api/lung_cancer/patients/");
-        console.log("API 응답:", response);
-        return response.results || [];
+        // API가 페이지네이션 시 { results: [...] }, 비페이지네이션 시 배열 직접 반환 둘 다 처리
+        if (Array.isArray(response)) return response;
+        return response?.results ?? [];
       } catch (err) {
         console.error("환자 목록 조회 오류:", err);
         throw err;

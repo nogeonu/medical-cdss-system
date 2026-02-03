@@ -124,6 +124,10 @@ export default function PathologyAnalysis() {
         setAnalysisResult(null);
         return;
       }
+      // 진행 중인 요청이 있으면 저장된 결과로 덮어쓰지 않음 (다른 페이지 갔다 와도/새로고침해도 "워커 실행 중" 유지)
+      if (sessionStorage.getItem(PATHOLOGY_PENDING_KEY)) {
+        return;
+      }
 
       try {
         // 주문 상세 정보 불러오기 (pathology_analysis 포함)

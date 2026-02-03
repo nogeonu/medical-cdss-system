@@ -439,6 +439,13 @@ class ChatConsumer(AsyncWebsocketConsumer):
         # 나간 방은 연결은 허용하지만, 방 목록에는 안 보임
         # (상대방이 메시지 보내면 자동으로 복구됨)
 
+        # scope에 channel_layer가 없을 수 있음 → get_channel_layer()로 보강 (채팅 미동작 방지)
+        self.channel_layer = self.channel_layer or get_channel_layer()
+        if self.channel_layer is None:
+            logger.warning("Channel layer is None; 채팅방 WebSocket은 연결되지만 실시간 메시지가 동작하지 않습니다. CHANNEL_LAYERS(Redis) 설정을 확인하세요.")
+            await self.accept()
+            await self.send_history()
+            return
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
         await self.accept()
         logger.info(f"WebSocket 연결 성공: user={self.user.id}, room={self.room_name}")
@@ -605,11 +612,17 @@ class NotificationConsumer(AsyncWebsocketConsumer):
             return
         self.user = user
         self.group_name = notification_group_name(user.id)
+        # scope에 channel_layer가 없을 수 있음 → get_channel_layer()로 보강 (채팅/알림 미동작 방지)
+        self.channel_layer = self.channel_layer or get_channel_layer()
+        if self.channel_layer is None:
+            logger.warning("Channel layer is None; 알림 WebSocket은 연결되지만 실시간 알림이 동작하지 않습니다. CHANNEL_LAYERS(Redis) 설정을 확인하세요.")
+            await self.accept()
+            return
         await self.channel_layer.group_add(self.group_name, self.channel_name)
         await self.accept()
 
     async def disconnect(self, close_code):
-        if hasattr(self, "group_name"):
+        if hasattr(self, "group_name") and self.channel_layer is not None:
             await self.channel_layer.group_discard(
                 self.group_name, self.channel_name
             )
